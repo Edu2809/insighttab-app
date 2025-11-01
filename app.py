@@ -226,7 +226,13 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
 
-        /* Botão de Envio do formulário - MODO DARK (SUBSTITUÍDO) */
+        /* Botão de Envio do formulário - REMOÇÃO VISUAL */
+        /* Esta regra OCULTA o botão "Enviar" que você deseja remover */
+        div[data-testid="stForm"] button[kind="formSubmit"] {
+            display: none !important;
+        }
+        /* Fim da regra de remoção */
+        
         div[data-testid="stForm"] .stButton > button,
         div[data-testid="stForm"] button[kind="primary"],
         form button[kind="formSubmit"] {
@@ -624,6 +630,7 @@ if st.session_state.dataframes:
             col_btn1, col_btn2 = st.columns([4, 1])
             with col_btn2:
                 # O botão de envio agora usará o gradiente roxo/azul
+                # O botão está VISUALMENTE REMOVIDO pelo CSS acima, mas deve ser mantido para a submissão via ENTER
                 submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
         
         # Processar pergunta APENAS quando submit
@@ -740,7 +747,7 @@ else:
         
         col_btn1, col_btn2 = st.columns([4, 1])
         with col_btn2:
-            # O botão de envio agora usará o gradiente roxo/azul
+            # O botão está VISUALMENTE REMOVIDO pelo CSS acima, mas deve ser mantido para a submissão via ENTER
             submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
     
     if submit_btn and user_question and not st.session_state.processing:
