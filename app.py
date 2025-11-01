@@ -228,17 +228,16 @@ st.markdown(
 
         /* Botão de Envio do formulário */
         div[data-testid="stForm"] .stButton button {
-            background: var(--card-bg) !important;
-            color: var(--text-color) !important;
-            border: 2px solid var(--accent) !important;
+            background: #4a9eff !important;
+            color: white !important;
+            border: none !important;
             transition: all 0.3s;
         }
 
         div[data-testid="stForm"] .stButton button:hover {
-            background: linear-gradient(90deg, #667eea, #764ba2) !important; 
-            border-color: transparent !important;
-            transform: none;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.6);
+            background: #3d8de6 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(74, 158, 255, 0.5);
         }
         
         /* File uploader - MODO ESCURO */
