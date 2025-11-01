@@ -226,18 +226,24 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
 
-        /* Botão de Envio do formulário */
-        div[data-testid="stForm"] .stButton button {
+        /* Botão de Envio do formulário - COR AZUL FORÇADA */
+        div[data-testid="stForm"] .stButton > button,
+        div[data-testid="stForm"] button[kind="primary"],
+        form button[kind="formSubmit"] {
+            background-color: #4a9eff !important;
             background: #4a9eff !important;
             color: white !important;
             border: none !important;
-            transition: all 0.3s;
+            transition: all 0.3s !important;
         }
 
-        div[data-testid="stForm"] .stButton button:hover {
+        div[data-testid="stForm"] .stButton > button:hover,
+        div[data-testid="stForm"] button[kind="primary"]:hover,
+        form button[kind="formSubmit"]:hover {
+            background-color: #3d8de6 !important;
             background: #3d8de6 !important;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(74, 158, 255, 0.5);
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(74, 158, 255, 0.5) !important;
         }
         
         /* File uploader - MODO ESCURO */
