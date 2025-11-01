@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 # ═══════════════════════════════════════════════════════════════
 # 🔑 CONFIGURAÇÃO DA API - COLOQUE SUA API KEY AQUI:
 # ═══════════════════════════════════════════════════════════════
-GEMINI_API_KEY = "AIzaSyDXfzMeVJGN119B0gJiOnIZ8T8VmiMjr4U"  # ← LINHA 14
+GEMINI_API_KEY = "GEMINI_API_KEY"  # ← LINHA 14
 # ═══════════════════════════════════════════════════════════════
 
 MODEL_TIMEOUT = 60
