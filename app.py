@@ -1,128 +1,426 @@
-# app.py
-import os
-import time
-import re
-import json
-import threading
-from io import BytesIO
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-from functools import wraps
-
-from flask import Flask, request, render_template_string, redirect, url_for, send_file, flash
+import streamlit as st
 import pandas as pd
+import os
 import google.generativeai as genai
+from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import time
+import warnings
+warnings.filterwarnings('ignore')
 
-# Opcional Google Sheets
-try:
-    import gspread
-    from google.oauth2.service_account import Credentials
-    GSHEET_AVAILABLE = True
-except Exception:
-    GSHEET_AVAILABLE = False
+# ═══════════════════════════════════════════════════════════════
+# 🔑 CONFIGURAÇÃO DA API - COLOQUE SUA API KEY AQUI:
+# ═══════════════════════════════════════════════════════════════
+# ... (suas imports já OK: import os, genai, etc.)
 
-# ========== CONFIGURAÇÃO ==========
-# Carregar chave Gemini da variável de ambiente
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# ✅ FIX: LINHA 14 CORRIGIDA
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') # Pega do Render AUTOMATICAMENTE!
+
 if not GEMINI_API_KEY:
-    raise RuntimeError("Variável de ambiente GEMINI_API_KEY não definida. Coloque sua chave e reexecute.")
+    st.error("❌ API Key GEMINI_API_KEY não encontrada!")
+    st.error("👉 Render Dashboard > Environment > Adicione: GEMINI_API_KEY = sua_chave_real")
+    st.stop() # Para o app
 
+# Configura Gemini (vai funcionar!)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Modelo - tentativa de configurar
-try:
-    MODEL = genai.GenerativeModel("gemini-2.5-flash")
-except Exception:
-    MODEL = None
+# ... resto do seu código IGUAL (MODEL_TIMEOUT, etc.)
+# ═══════════════════════════════════════════════════════════════
 
-# Parâmetros
-MODEL_TIMEOUT = 60            # segundos
+MODEL_TIMEOUT = 60
 MODEL_RETRIES = 2
 RETRY_BACKOFF = 2.0
 SAMPLE_SIZE = 500
 MAX_OUTPUT_TOKENS = 1024
 
-# Flask
-app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "troque_esta_chave_em_producao")
+st.set_page_config(
+    page_title="InsightTab - Analista Inteligente", 
+    page_icon="📊", 
+    layout="wide"
+)
 
-# Storage em memória (simples)
-UPLOADED_DFS = {}   # {filename: DataFrame or {sheet_name: DataFrame}}
-CHAT_HISTORY = []   # lista de dicts {"question":..., "answer":...}
+# ========== ESTADO INICIAL ==========
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "dataframes" not in st.session_state:
+    st.session_state.dataframes = {} # {filename: dataframe}
+if "processing" not in st.session_state:
+    st.session_state.processing = False
 
-# ========== UTILITÁRIOS ==========
-def read_file_to_df(file_storage):
+# ========== CSS MODO ESCURO FIXO (Incluindo FIXES para Cor e Fonte) ==========
+st.markdown(
     """
-    Lê arquivo enviado (CSV/XLSX/XLS).
-    Se o Excel tiver múltiplas sheets, retorna dict {sheet_name: df}.
-    """
-    name = file_storage.filename.lower()
-    file_storage.stream.seek(0)
-    content = file_storage.read()
-    bio = BytesIO(content)
+    <style>
+        /* Forçar modo escuro global */
+        :root {
+            --app-bg: #0b1116;
+            --panel-bg: #1a1f26;
+            --card-bg: #0f1720;
+            --text-color: #ffffff;
+            --muted-color: #9aa6b2;
+            --accent: #667eea;
+        }
+        
+        /* Background principal - FORÇAR ESCURO EM TUDO */
+        .stApp, body, .main, .block-container {
+            background-color: var(--app-bg) !important;
+            color: var(--text-color) !important;
+        }
+        
+        /* Forçar fundo escuro na área do conteúdo */
+        .main .block-container {
+            background-color: var(--app-bg) !important;
+        }
+        
+        /* Remover qualquer fundo branco */
+        .element-container, .stMarkdown, div[data-testid="stVerticalBlock"] {
+            background-color: transparent !important;
+        }
+        
+        /* Sidebar - melhorar contraste */
+        [data-testid="stSidebar"] {
+            background-color: var(--panel-bg) !important;
+        }
+        
+        [data-testid="stSidebar"] * {
+            color: var(--text-color) !important;
+        }
+        
+        /* Títulos da sidebar mais visíveis */
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {
+            color: var(--text-color) !important;
+            font-weight: 600 !important;
+        }
+        
+        /* Labels da sidebar */
+        [data-testid="stSidebar"] label {
+            color: var(--text-color) !important;
+            font-weight: 500 !important;
+        }
+        
+        /* Texto da sidebar */
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] div {
+            color: var(--text-color) !important;
+        }
+        
+        /* Header principal com ícone de estrela */
+        .main-header {
+            font-size: 2.8rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 1rem;
+            color: var(--text-color);
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .main-header::before {
+            content: "⭐";
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-right: 10px;
+            font-size: 1.8rem;
+        }
+        
+        /* Stats boxes */
+        .stat-box {
+            background: linear-gradient(135deg, #1a1f26, #2d3748);
+            padding: 18px;
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+            margin: 10px 0;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+        
+        /* Painéis */
+        .panel {
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        /* Mensagens do chat */
+        .chat-message {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 12px 0;
+            color: var(--text-color) !important;
+            max-width: 100%;
+            word-wrap: break-word;
+        }
+        
+        .user-message {
+            background: rgba(66,153,225,0.12);
+            border-left: 4px solid rgba(66,153,225,1);
+        }
+        
+        .bot-message {
+            background: rgba(156,39,176,0.1);
+            border-left: 4px solid rgba(156,39,176,1);
+        }
+        
+        .chat-message, .chat-message * {
+            color: var(--text-color) !important;
+        }
+        
+        /* FIX 1: Cor do elemento ID/Nome (código inline) para cor de fundo */
+        /* O fundo que o Streamlit aplica ao código é a cor do texto do usuário, no seu caso, branco */
+        /* O CSS abaixo ajusta o background e a cor do texto DENTRO do <code> */
+        .chat-message code {
+            /* Cor do texto do ID (T-JAN-0001, Monitor 4K) */
+            color: var(--accent) !important; 
+            /* Cor de fundo do destaque */
+            background-color: rgba(102, 126, 234, 0.15) !important; 
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: inherit !important; /* Mantenha a mesma fonte do texto ao redor */
+            font-size: 0.9em;
+        }
+        
+        /* FIX 2: Fonte "Comparando ambas..." (Garantir que seja a mesma fonte do texto normal, desativando estilos que alteram a fonte) */
+        /* Isso é garantido no Markdown sem o uso de ** negrito ou * itálico que mude a fonte, o que deve ser instruído ao modelo. */
+        /* A regra acima (font-family: inherit !important;) para <code> ajuda a manter a fonte uniforme nos IDs. */
 
-    if name.endswith(".csv"):
-        df = pd.read_csv(bio)
-        return df
-    else:
-        # tenta com openpyxl (xlsx/xls)
+        /* Inputs e formulários */
+        .stTextInput>div>div>input,
+        .stTextArea>div>div>textarea {
+            background-color: var(--card-bg) !important;
+            color: var(--text-color) !important;
+            border: 1px solid rgba(102, 126, 234, 0.3) !important;
+            border-radius: 8px;
+        }
+        
+        .stTextInput>label,
+        .stTextArea>label {
+            color: var(--text-color) !important;
+            font-weight: 500;
+        }
+        
+        /* Placeholder branco */
+        .stTextInput>div>div>input::placeholder,
+        .stTextArea>div>div>textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5) !important;
+            opacity: 1 !important;
+        }
+        
+        /* Foco nos inputs */
+        .stTextInput>div>div>input:focus,
+        .stTextArea>div>div>textarea:focus {
+            border-color: var(--accent) !important;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+        }
+        
+        /* Botões */
+        .stButton>button {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: white !important;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s;
+            width: 100%;
+        }
+        
+        .stButton>button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        /* File uploader - MODO ESCURO */
+        [data-testid="stFileUploader"] {
+            background-color: var(--card-bg) !important;
+            border: 2px dashed rgba(102, 126, 234, 0.5) !important;
+            border-radius: 10px !important;
+            padding: 25px !important;
+        }
+        
+        [data-testid="stFileUploader"] * {
+            color: var(--text-color) !important;
+        }
+        
+        [data-testid="stFileUploader"] section {
+            background-color: var(--card-bg) !important;
+            border: none !important;
+        }
+        
+        [data-testid="stFileUploader"] button {
+            background-color: rgba(102, 126, 234, 0.2) !important;
+            color: var(--text-color) !important;
+            border: 1px solid rgba(102, 126, 234, 0.4) !important;
+        }
+        
+        [data-testid="stFileUploader"] small {
+            color: var(--muted-color) !important;
+        }
+        
+        /* DataFrames */
+        .stDataFrame {
+            background-color: var(--panel-bg) !important;
+        }
+        
+        .stDataFrame * {
+            color: var(--text-color) !important;
+        }
+        
+        /* Spinner */
+        .stSpinner > div {
+            border-top-color: var(--accent) !important;
+        }
+        
+        /* Esconder footer padrão do Streamlit */
+        footer {
+            visibility: hidden;
+        }
+        
+        footer:after {
+            content: '';
+            visibility: hidden;
+        }
+        
+        /* Remover "Made with Streamlit" */
+        .viewerBadge_container__1QSob {
+            display: none !important;
+        }
+        
+        /* Markdown */
+        .stMarkdown {
+            color: var(--text-color) !important;
+        }
+        
+        /* Selectbox */
+        .stSelectbox>div>div>div {
+            background-color: var(--card-bg) !important;
+            color: var(--text-color) !important;
+        }
+        
+        /* Success/Error/Warning messages */
+        .stAlert {
+            background-color: var(--panel-bg) !important;
+            color: var(--text-color) !important;
+            border-radius: 8px;
+        }
+        
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            background-color: var(--panel-bg) !important;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            color: var(--text-color) !important;
+        }
+        
+        /* FORÇAR REMOÇÃO DE QUALQUER FUNDO BRANCO */
+        section[data-testid="stAppViewContainer"] {
+            background-color: var(--app-bg) !important;
+        }
+        
+        header[data-testid="stHeader"] {
+            background-color: transparent !important;
+        }
+        
+        /* Container principal */
+        .main {
+            background-color: var(--app-bg) !important;
+        }
+        
+        /* Todos os elementos precisam ser escuros */
+        * {
+            scrollbar-color: var(--muted-color) var(--app-bg);
+        }
+        
+        /* Scrollbar customizada */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--app-bg);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--muted-color);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent);
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ========== CONFIGURAR GEMINI ==========
+try:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-2.5-flash")
+except Exception:
+    model = None
+
+# ========== FUNÇÕES AUXILIARES ==========
+def read_uploaded_file_to_df(uploaded_file):
+    """Lê arquivo Excel ou CSV e retorna DataFrame"""
+    if uploaded_file is None:
+        raise ValueError("Nenhum arquivo fornecido")
+    try:
+        uploaded_file.seek(0)
+        content = uploaded_file.getvalue()
+        bio = BytesIO(content)
+        name = uploaded_file.name.lower()
+        
+        if name.endswith(".csv"):
+            df = pd.read_csv(bio)
+            bio.close()
+            return df
+        
         try:
-            xls = pd.ExcelFile(bio, engine="openpyxl")
-        except Exception as e:
-            # fallback: pandas read_excel direta
-            bio.seek(0)
             df = pd.read_excel(bio, engine="openpyxl")
+            bio.close()
             return df
-
-        sheets = xls.sheet_names
-        if len(sheets) == 1:
-            df = xls.parse(sheets[0])
-            xls.close()
-            return df
-        else:
-            dfs = {}
-            for s in sheets:
-                dfs[s] = xls.parse(s)
-            xls.close()
-            return dfs
-
-def read_gsheet(spreadsheet_id=None, creds_json_path=None, creds_json_string=None):
-    """
-    Lê uma planilha Google Sheets por ID (todas as abas).
-    Retorna dict {sheet_name: df}
-    Necessita `gspread` e credenciais de service account.
-    """
-    if not GSHEET_AVAILABLE:
-        raise RuntimeError("gspread não disponível. Instale gspread e google-auth para usar Google Sheets.")
-    if creds_json_string:
-        creds_info = json.loads(creds_json_string)
-        creds = Credentials.from_service_account_info(creds_info, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
-    elif creds_json_path and os.path.exists(creds_json_path):
-        creds = Credentials.from_service_account_file(creds_json_path, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
-    else:
-        raise RuntimeError("Credenciais do Google Sheets não fornecidas (path ou JSON string).")
-
-    client = gspread.authorize(creds)
-    sh = client.open_by_key(spreadsheet_id)
-    worksheets = sh.worksheets()
-    result = {}
-    for ws in worksheets:
-        values = ws.get_all_records()
-        df = pd.DataFrame(values)
-        result[ws.title] = df
-    return result
+        except Exception:
+            bio.seek(0)
+            xl = pd.ExcelFile(bio, engine="openpyxl")
+            sheets = xl.sheet_names
+            if len(sheets) > 1:
+                # Carregar todas as sheets
+                dfs = {}
+                for sheet in sheets:
+                    bio.seek(0)
+                    dfs[sheet] = pd.read_excel(bio, sheet_name=sheet, engine="openpyxl")
+                xl.close()
+                bio.close()
+                return dfs # Retorna dict de DataFrames
+            else:
+                bio.seek(0)
+                df = pd.read_excel(bio, engine="openpyxl")
+                xl.close()
+                bio.close()
+                return df
+    except Exception as e:
+        raise Exception(f"Erro ao ler arquivo: {str(e)}")
 
 def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
-    """
-    Constrói prompt a partir dos dataframes carregados.
-    dataframes: dict {filename: df_or_dict}
-    """
+    """Constrói prompt com dados das planilhas"""
     if not dataframes:
-        return f"Nenhuma planilha carregada.\nPergunta: {question}"
-
+        return f"Nenhuma planilha foi carregada ainda.\n\nPergunta: {question}"
+    
+    # Combinar dados de todas as planilhas
     all_data = ""
     total_rows = 0
+    
     for filename, df in dataframes.items():
-        if isinstance(df, dict):
+        if isinstance(df, dict): # Multi-sheet
             for sheet_name, sheet_df in df.items():
                 preview = sheet_df.head(5).to_string(index=False)
                 all_data += f"\n--- Planilha: {filename} | Aba: {sheet_name} ({len(sheet_df)} linhas) ---\n{preview}\n"
@@ -131,7 +429,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
             preview = df.head(5).to_string(index=False)
             all_data += f"\n--- Planilha: {filename} ({len(df)} linhas) ---\n{preview}\n"
             total_rows += len(df)
-
+    
     prompt = f"""Você é um analista de dados especializado.
 
 DADOS CARREGADOS ({total_rows} linhas no total):
@@ -140,30 +438,37 @@ DADOS CARREGADOS ({total_rows} linhas no total):
 PERGUNTA DO USUÁRIO: {question}
 
 INSTRUÇÕES:
-1. Analise APENAS os dados fornecidos acima.
-2. Responda em português brasileiro de forma clara e profissional.
-3. Use estatísticas e números EXATOS dos dados quando possível.
-4. Formate valores monetários em reais (R$) quando apropriado.
-5. Mantenha uma frase de destaque com fonte uniforme: "Comparando ambas, a maior venda de Abril".
-6. Se a pergunta exigir dados que não estão nas planilhas, diga explicitamente.
+1. Analise APENAS os dados fornecidos acima
+2. Responda em português brasileiro de forma clara e profissional
+3. Use estatísticas e números EXATOS dos dados
+4. Se a pergunta for sobre dados não presentes, informe isso
+5. Seja objetivo e direto na resposta
+6. **FIX: Formate todos os valores monetários em Reais, usando o formato R$ X.XXX,XX (ex: R$ 42.173,01).**
+7. **FIX: Para a frase 'Comparando ambas, a maior venda de Abril...', use a mesma fonte do texto normal, evite negrito/itálico que altere a fonte no meio dessa frase, apenas destaque números e nomes de itens/IDs com a formatação padrão do Markdown (texto entre crases `like this`).**
+
 Responda agora:"""
+    
     return prompt
 
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
-    if MODEL is None:
-        raise RuntimeError("Modelo não configurado. Verifique GEMINI_API_KEY.")
-    # A API do genai pode variar; tentamos usar generate_content
-    resp = MODEL.generate_content(prompt, max_output_tokens=max_output_tokens)
+    """Chamada síncrona ao modelo"""
+    if model is None:
+        raise RuntimeError("Modelo não configurado. Verifique a API Key na linha 14.")
+    try:
+        resp = model.generate_content(prompt, max_output_tokens=max_output_tokens)
+    except TypeError:
+        resp = model.generate_content(prompt)
     return getattr(resp, "text", str(resp))
 
 def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
+    """Chama modelo com timeout e retry"""
     last_exc = None
     for attempt in range(1, MODEL_RETRIES + 1):
         with ThreadPoolExecutor(max_workers=1) as ex:
             future = ex.submit(_call_model_sync, prompt)
             try:
                 return future.result(timeout=timeout)
-            except FuturesTimeout as te:
+            except TimeoutError as te:
                 future.cancel()
                 last_exc = te
             except Exception as e:
@@ -171,304 +476,216 @@ def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
         time.sleep(RETRY_BACKOFF ** (attempt - 1))
     raise last_exc
 
-# Formatação monetária robusta (transforma padrões numéricos em R$ X.XXX,YY)
-def format_currency_in_text(text):
-    """
-    Detecta números no texto e aplica prefixo R$ conforme heurísticas.
-    Não é perfeito para todos os casos, mas cobre os formatos mais comuns:
-      - 1.234,56  (BR)
-      - 1234.56  (EN) -> será convertido para R$ 1.234,56
-      - 1234    -> R$ 1.234 se for plausível
-    Mantemos números pequenos (1, 2, 3) sem prefixo para evitar ruído.
-    """
-    if not isinstance(text, str):
-        return text
+# ========== HEADER ==========
+st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', unsafe_allow_html=True)
 
-    # Primeiro, já no formato BR (ex: 1.234,56)
-    text = re.sub(r'(?<!R\$)\s(\d{1,3}(?:\.\d{3})*,\d{2})\b', r' R$ \1', text)
+# ========== SIDEBAR - UPLOAD MÚLTIPLO ==========
+with st.sidebar:
+    st.markdown("### 📂 Upload de Planilhas")
+    st.markdown('<p style="color: var(--muted-color); font-size: 0.9em;">Carregue uma ou várias planilhas simultaneamente</p>', unsafe_allow_html=True)
+    
+    # Upload múltiplo
+    uploaded_files = st.file_uploader(
+        "Envie seus arquivos (Excel ou CSV)",
+        type=["xlsx", "xls", "csv"],
+        accept_multiple_files=True,
+        label_visibility="collapsed"
+    )
+    
+    # Processar uploads automaticamente
+    if uploaded_files:
+        new_files = []
+        for file in uploaded_files:
+            if file.name not in st.session_state.dataframes:
+                new_files.append(file)
+        
+        if new_files:
+            with st.spinner(f"📊 Carregando {len(new_files)} arquivo(s)..."):
+                for file in new_files:
+                    try:
+                        df = read_uploaded_file_to_df(file)
+                        st.session_state.dataframes[file.name] = df
+                    except Exception as e:
+                        st.error(f"❌ Erro em {file.name}: {str(e)}")
+    
+    # Mostrar arquivos carregados
+    if st.session_state.dataframes:
+        st.markdown("---")
+        st.markdown("### ✅ Planilhas Carregadas")
+        
+        total_rows = 0
+        for filename, df in st.session_state.dataframes.items():
+            if isinstance(df, dict): # Multi-sheet
+                sheets_info = ", ".join([f"{name} ({len(sheet_df)} linhas)" for name, sheet_df in df.items()])
+                st.markdown(f"**{filename}**<br><small>{sheets_info}</small>", unsafe_allow_html=True)
+                total_rows += sum(len(sheet_df) for sheet_df in df.values())
+            else:
+                st.markdown(f"**{filename}**<br><small>{len(df)} linhas</small>", unsafe_allow_html=True)
+                total_rows += len(df)
+        
+        st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
+        
+        # Botão limpar
+        if st.button("🗑️ Limpar Todas as Planilhas"):
+            st.session_state.dataframes = {}
+            st.session_state.chat_history = []
+            st.rerun()
 
-    # Converter números com ponto decimal (ex: 1234.56) para R$ 1.234,56
-    def repl_en_decimal(m):
-        val = m.group(0)
-        try:
-            f = float(val)
-            # formata para BR
-            br = f"{f:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            return f"R$ {br}"
-        except Exception:
-            return val
+# ========== ÁREA PRINCIPAL ==========
+if st.session_state.dataframes:
+    # Área do chat PRIMEIRO
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    
+    # Histórico de chat
+    chat_container = st.container()
+    with chat_container:
+        for chat in st.session_state.chat_history:
+            st.markdown(
+                f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f'<div class="chat-message bot-message"><b>🤖 InsightTab:</b><br>{chat["answer"]}</div>',
+                unsafe_allow_html=True
+            )
+    
+    st.markdown("---")
+    
+    # Input de pergunta com form (evita duplicação)
+    with st.form(key="chat_form", clear_on_submit=True):
+        user_question = st.text_input(
+            "💭 Faça sua pergunta sobre os dados:",
+            placeholder="Ex: Qual é a média de vendas? Qual produto tem maior lucro?",
+            key="chat_input",
+            label_visibility="collapsed"
+        )
+        
+        col_btn1, col_btn2 = st.columns([4, 1])
+        with col_btn2:
+            submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
+    
+    # Processar pergunta APENAS quando submit
+    if submit_btn and user_question and not st.session_state.processing:
+        st.session_state.processing = True
+        
+        prompt = build_prompt_with_data(user_question, st.session_state.dataframes, SAMPLE_SIZE)
+        
+        with st.spinner("🤖 Analisando seus dados..."):
+            try:
+                answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
+            except TimeoutError:
+                answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente uma pergunta mais simples."
+            except Exception as e:
+                answer = f"❌ Erro: {str(e)}"
+        
+        # Adicionar ao histórico
+        st.session_state.chat_history.append({
+            "question": user_question,
+            "answer": answer
+        })
+        
+        st.session_state.processing = False
+        st.rerun()
+    
+    # Botão limpar chat
+    if st.button("🧹 Limpar Conversa"):
+        st.session_state.chat_history = []
+        st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Stats boxes DEPOIS do chat
+    total_files = len(st.session_state.dataframes)
+    total_rows = sum(len(df) if not isinstance(df, dict) else sum(len(s) for s in df.values()) for df in st.session_state.dataframes.values())
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{total_files}</h2><p style="margin:0; opacity:0.8;">Planilhas</p></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{total_rows:,}</h2><p style="margin:0; opacity:0.8;">Linhas Totais</p></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{len(st.session_state.chat_history)}</h2><p style="margin:0; opacity:0.8;">Perguntas</p></div>', unsafe_allow_html=True)
 
-    text = re.sub(r'(?<!R\$)\b\d+\.\d{1,2}\b', repl_en_decimal, text)
-
-    # Números inteiros grandes: 1000 -> R$ 1.000
-    def repl_int(m):
-        val = m.group(0)
-        # se for pequeno (até 3 dígitos) não coloco R$
-        if len(val) <= 3:
-            return val
-        try:
-            i = int(val)
-            br = f"{i:,}".replace(",", ".")
-            return f"R$ {br}"
-        except:
-            return val
-
-    text = re.sub(r'(?<!R\$)\b\d{4,}\b', repl_int, text)
-
-    # Garante não duplicar R$
-    text = re.sub(r'R\$\s+R\$\s*', 'R$ ', text)
-    return text
-
-# Segurança simples: limitar upload size (opcional)
-MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", 5 * 1024 * 1024))  # 5MB padrão
-
-# ========== TEMPLATE HTML ==========
-# Template com CSS que força modo escuro, corrige texto branco/branco em inputs/tables, e define fonte uniforme.
-BASE_HTML = """
-<!doctype html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>InsightTab - Analista Inteligente (Flask)</title>
-  <style>
-    :root{
-      --app-bg: #0b1116;
-      --panel-bg: #12161a;
-      --card-bg: #0f1720;
-      --text-color: #e6eef3;
-      --muted: #9aa6b2;
-      --accent: #667eea;
-      --font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
-    }
-    html,body {
-      height:100%;
-      margin:0;
-      background:var(--app-bg);
-      color:var(--text-color);
-      font-family:var(--font-family);
-    }
-    .container{
-      max-width:1100px;
-      margin:20px auto;
-      padding:20px;
-    }
-    header{
-      text-align:center;
-      margin-bottom:10px;
-    }
-    h1{
-      font-size:28px;
-      margin:0;
-      background:linear-gradient(90deg,#667eea,#764ba2);
-      -webkit-background-clip:text;
-      -webkit-text-fill-color:transparent;
-    }
-    .panel{
-      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-      border-radius:12px;
-      padding:18px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.5);
-      border: 1px solid rgba(255,255,255,0.03);
-      margin-bottom:16px;
-    }
-    .row{display:flex; gap:16px;}
-    .col{flex:1;}
-    .actions{display:flex; gap:10px; align-items:center;}
-    input[type="file"]{background:var(--card-bg); color:var(--text-color); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03)}
-    input[type="text"], textarea{
-      width:100%; padding:10px; border-radius:8px; background:var(--card-bg); color:var(--text-color); border:1px solid rgba(255,255,255,0.04)
-    }
-    button{
-      background: linear-gradient(90deg, #667eea, #764ba2);
-      color:white; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600;
-    }
-    .file-list{margin-top:10px; color:var(--muted);}
-    table{width:100%; border-collapse:collapse; margin-top:10px; font-size:0.95em;}
-    th, td{padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.03); text-align:left; color:var(--text-color);}
-    /* Corrige texto branco/branco em células com background claro (garante contraste) */
-    td, th, caption, label, p, span, a, li {
-      color: var(--text-color) !important;
-      font-family: var(--font-family) !important;
-    }
-    .muted { color: var(--muted); font-size:0.9em; }
-    .uniform-font { font-family: var(--font-family); font-size:1.05em; }
-    .chat { max-height:320px; overflow:auto; padding:10px; background: rgba(255,255,255,0.01); border-radius:8px; }
-    .user { background: rgba(66,153,225,0.07); padding:8px; border-left:4px solid rgba(66,153,225,1); margin-bottom:8px; border-radius:6px;}
-    .bot { background: rgba(156,39,176,0.06); padding:8px; border-left:4px solid rgba(156,39,176,1); margin-bottom:8px; border-radius:6px;}
-    .highlight { padding:8px; background: linear-gradient(90deg,#222533,#2a2f3b); border-radius:8px; margin-top:10px; }
-    footer { text-align:center; color:var(--muted); margin-top:18px; font-size:0.9em; }
-    .danger { color:#ff7b7b; font-weight:600; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header>
-      <h1>InsightTab - Analista Inteligente ⭐</h1>
-      <p class="muted">Faça upload de suas planilhas e faça perguntas em linguagem natural.</p>
-    </header>
-
-    <div class="panel">
-      <form method="post" action="/upload" enctype="multipart/form-data">
-        <div class="row">
-          <div class="col">
-            <label for="files">Enviar arquivos (Excel/CSV)</label><br>
-            <input type="file" id="files" name="files" multiple>
-            <div class="file-list">
-              {% if uploaded %}
-                <strong>Planilhas carregadas:</strong>
-                <ul>
-                {% for name, info in uploaded.items() %}
-                  <li>{{name}} <span class="muted">({{info.rows}} linhas{% if info.sheets %}, abas: {{info.sheets}}{% endif %})</span></li>
-                {% endfor %}
-                </ul>
-              {% else %}
-                Nenhuma planilha enviada ainda.
-              {% endif %}
+else:
+    # Tela inicial (sem dados) - MAS COM CHAT
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    
+    # Histórico de chat (se houver)
+    if st.session_state.chat_history:
+        for chat in st.session_state.chat_history:
+            st.markdown(
+                f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f'<div class="chat-message bot-message"><b>🤖 InsightTab:</b><br>{chat["answer"]}</div>',
+                unsafe_allow_html=True
+            )
+        st.markdown("---")
+    
+    # Form para enviar perguntas mesmo sem dados
+    with st.form(key="nodata_form", clear_on_submit=True):
+        user_question = st.text_input(
+            "💭 Faça sua pergunta:",
+            placeholder="Ex: Como funciona este app? O que posso fazer aqui?",
+            key="input_question_no_data",
+            label_visibility="collapsed"
+        )
+        
+        col_btn1, col_btn2 = st.columns([4, 1])
+        with col_btn2:
+            submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
+    
+    if submit_btn and user_question and not st.session_state.processing:
+        st.session_state.processing = True
+        prompt = build_prompt_with_data(user_question, None)
+        
+        with st.spinner("🤖 Analisando..."):
+            try:
+                answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
+            except TimeoutError:
+                answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente novamente."
+            except Exception as e:
+                answer = f"❌ Erro: {str(e)}"
+        
+        st.session_state.chat_history.append({
+            "question": user_question,
+            "answer": answer
+        })
+        st.session_state.processing = False
+        st.rerun()
+    
+    # Botão limpar chat
+    if st.session_state.chat_history:
+        if st.button("🧹 Limpar Conversa"):
+            st.session_state.chat_history = []
+            st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Mensagem de boas-vindas
+    st.markdown(
+        """
+        <div class="panel" style="text-align:center; padding: 60px 20px;">
+            <img src='https://img.icons8.com/fluency/150/data-configuration.png' width='150' style="margin-bottom:20px;"/>
+            <h2 style="margin:10px 0; color: var(--text-color);">Bem-vindo ao InsightTab! 👋</h2>
+            <p style="color:var(--muted-color); font-size: 1.1em; margin-bottom: 30px;">
+                Carregue suas planilhas na barra lateral e comece a fazer perguntas inteligentes
+            </p>
+            <div style="background: var(--card-bg); padding: 20px; border-radius: 10px; max-width: 600px; margin: 0 auto;">
+                <h3 style="color: var(--text-color); margin-top: 0;">🚀 Como usar:</h3>
+                <ol style="text-align: left; color: var(--text-color); line-height: 1.8;">
+                    <li>Faça upload de uma ou mais planilhas (Excel/CSV)</li>
+                    <li>Os dados serão carregados automaticamente</li>
+                    <li>Digite sua pergunta no chat acima</li>
+                    <li>A IA analisa e responde baseado nos seus dados</li>
+                </ol>
             </div>
-          </div>
-          <div class="col actions">
-            <button type="submit">📥 Carregar</button>
-            <a href="/clear" style="text-decoration:none"><button type="button">🗑️ Limpar</button></a>
-          </div>
         </div>
-      </form>
-    </div>
-
-    <div class="panel">
-      <form method="post" action="/ask">
-        <label for="question">💭 Faça sua pergunta sobre os dados:</label><br>
-        <input type="text" id="question" name="question" placeholder="Ex: Qual produto vendeu mais em Abril?" required>
-        <div style="margin-top:8px;">
-          <button type="submit">📤 Perguntar</button>
-          <a href="/history" style="margin-left:10px; color:var(--muted); text-decoration:none;">Ver histórico</a>
-        </div>
-      </form>
-      <div style="margin-top:12px;">
-        <div class="chat">
-          {% for h in history %}
-            <div class="user"><b>Você:</b> {{h.question}}</div>
-            <div class="bot uniform-font"><b>InsightTab:</b><br> {{h.answer|safe}}</div>
-          {% else %}
-            <div class="muted">Nenhuma interação ainda. Pergunte algo usando o formulário acima.</div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h3 class="uniform-font">Visualizar amostra das planilhas</h3>
-      {% if uploaded %}
-        {% for name, info in uploaded.items() %}
-          <div style="margin-top:12px;">
-            <strong>{{name}}</strong> <span class="muted">({{info.rows}} linhas)</span>
-            {% if info.preview_html %}
-              <div class="highlight">{{info.preview_html|safe}}</div>
-            {% endif %}
-          </div>
-        {% endfor %}
-      {% else %}
-        <div class="muted">Não há planilhas para visualizar.</div>
-      {% endif %}
-    </div>
-
-    <footer>
-      InsightTab — Exemplo integrado com Gemini. Configure GEMINI_API_KEY no ambiente. 
-    </footer>
-  </div>
-</body>
-</html>
-"""
-
-# ========== ROTAS ==========
-@app.route("/", methods=["GET"])
-def index():
-    uploaded = {}
-    for k, v in UPLOADED_DFS.items():
-        if isinstance(v, dict):  # multi-sheet
-            total_rows = sum(len(df) for df in v.values())
-            sheets = ", ".join(v.keys())
-            # preview: first sheet head
-            first = next(iter(v.values()))
-            preview_html = first.head(5).to_html(classes="table", index=False)
-            uploaded[k] = {"rows": total_rows, "sheets": sheets, "preview_html": preview_html}
-        else:
-            uploaded[k] = {"rows": len(v), "sheets": None, "preview_html": v.head(5).to_html(classes="table", index=False)}
-    # reverse history for display (most recent last)
-    return render_template_string(BASE_HTML, uploaded=uploaded, history=CHAT_HISTORY)
-
-@app.route("/upload", methods=["POST"])
-def upload():
-    files = request.files.getlist("files")
-    if not files:
-        flash("Nenhum arquivo enviado.", "danger")
-        return redirect(url_for("index"))
-    for f in files:
-        f.stream.seek(0)
-        data = f.read()
-        if len(data) > MAX_UPLOAD_BYTES:
-            flash(f"Arquivo {f.filename} excede o limite de {MAX_UPLOAD_BYTES} bytes.", "danger")
-            continue
-        f.stream.seek(0)
-        try:
-            # reconstruct FileStorage-like object to pass to reader
-            f.stream.seek(0)
-            # pandas accepts BytesIO
-            df_or_dict = read_file_to_df(f)
-            UPLOADED_DFS[f.filename] = df_or_dict
-        except Exception as e:
-            flash(f"Erro ao ler {f.filename}: {e}", "danger")
-    return redirect(url_for("index"))
-
-@app.route("/clear", methods=["GET"])
-def clear():
-    UPLOADED_DFS.clear()
-    CHAT_HISTORY.clear()
-    return redirect(url_for("index"))
-
-@app.route("/ask", methods=["POST"])
-def ask():
-    question = request.form.get("question", "").strip()
-    if not question:
-        flash("Pergunta vazia.", "danger")
-        return redirect(url_for("index"))
-
-    # contruir prompt
-    prompt = build_prompt_with_data(question, UPLOADED_DFS, SAMPLE_SIZE)
-
-    # chamar modelo com timeout / retries
-    try:
-        raw_answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
-    except Exception as e:
-        raw_answer = f"❌ Erro ao chamar o modelo: {str(e)}"
-
-    # formatar moeda
-    answer_formatted = format_currency_in_text(raw_answer)
-
-    # garantir que frase "Comparando ambas, a maior venda de Abril" tenha fonte uniforme no HTML
-    # substituimos a frase (se aparecer) por um bloco com a classe uniform-font
-    phrase = "Comparando ambas, a maior venda de Abril"
-    if phrase in answer_formatted:
-        answer_formatted = answer_formatted.replace(phrase, f'<span class="uniform-font">{phrase}</span>')
-
-    CHAT_HISTORY.append({"question": question, "answer": answer_formatted})
-    # limite histórico em memória (p.ex. 80)
-    if len(CHAT_HISTORY) > 200:
-        CHAT_HISTORY.pop(0)
-
-    return redirect(url_for("index"))
-
-@app.route("/history", methods=["GET"])
-def history():
-    # simples exibição do histórico em texto plano
-    out = "<h2>Histórico</h2><ul>"
-    for h in CHAT_HISTORY:
-        out += f"<li><b>Q:</b> {h['question']}<br><b>A:</b> {h['answer']}</li><hr>"
-    out += "</ul><a href='/'>Voltar</a>"
-    return out
-
-# ========== EXECUÇÃO ==========
-if __name__ == "__main__":
-    # roda em 0.0.0.0:5000 por padrão
-    debug = os.getenv("FLASK_DEBUG", "0") == "1"
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=debug)
+        """,
+        unsafe_allow_html=True,
+    )
