@@ -47,7 +47,7 @@ if "dataframes" not in st.session_state:
 if "processing" not in st.session_state:
     st.session_state.processing = False
 
-# ========== CSS MODO ESCURO FIXO (Incluindo FIXES para Cor e Fonte) ==========
+# ========== CSS MODO ESCURO FIXO (Incluindo FIXES para Cor e Fonte e Hover do Botão Enviar) ==========
 st.markdown(
     """
     <style>
@@ -174,8 +174,6 @@ st.markdown(
         }
         
         /* FIX 1: Cor do elemento ID/Nome (código inline) para cor de fundo */
-        /* O fundo que o Streamlit aplica ao código é a cor do texto do usuário, no seu caso, branco */
-        /* O CSS abaixo ajusta o background e a cor do texto DENTRO do <code> */
         .chat-message code {
             /* Cor do texto do ID (T-JAN-0001, Monitor 4K) */
             color: var(--accent) !important; 
@@ -187,10 +185,6 @@ st.markdown(
             font-size: 0.9em;
         }
         
-        /* FIX 2: Fonte "Comparando ambas..." (Garantir que seja a mesma fonte do texto normal, desativando estilos que alteram a fonte) */
-        /* Isso é garantido no Markdown sem o uso de ** negrito ou * itálico que mude a fonte, o que deve ser instruído ao modelo. */
-        /* A regra acima (font-family: inherit !important;) para <code> ajuda a manter a fonte uniforme nos IDs. */
-
         /* Inputs e formulários */
         .stTextInput>div>div>input,
         .stTextArea>div>div>textarea {
@@ -234,6 +228,20 @@ st.markdown(
         .stButton>button:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        /* FIX 3: Botão de Envio (do formulário) para ter o mesmo hover/cor de destaque */
+        /* Note que o Streamlit atribui um ID único a cada widget, mas podemos mirar o botão dentro do form */
+        div[data-testid="stForm"] .stButton button {
+            background: #667eea; /* Cor sólida para o botão Enviar (cor principal) */
+            transition: all 0.3s;
+        }
+
+        div[data-testid="stForm"] .stButton button:hover {
+            /* Cor do hover idêntica ao gradiente de destaque dos outros botões */
+            background: linear-gradient(90deg, #667eea, #764ba2) !important; 
+            transform: none; /* remove o efeito de subida no hover para o botão de enviar */
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.6); /* um box shadow de destaque */
         }
         
         /* File uploader - MODO ESCURO */
@@ -443,8 +451,8 @@ INSTRUÇÕES:
 3. Use estatísticas e números EXATOS dos dados
 4. Se a pergunta for sobre dados não presentes, informe isso
 5. Seja objetivo e direto na resposta
-6. **FIX: Formate todos os valores monetários em Reais, usando o formato R$ X.XXX,XX (ex: R$ 42.173,01).**
-7. **FIX: Para a frase 'Comparando ambas, a maior venda de Abril...', use a mesma fonte do texto normal, evite negrito/itálico que altere a fonte no meio dessa frase, apenas destaque números e nomes de itens/IDs com a formatação padrão do Markdown (texto entre crases `like this`).**
+6. **FIX: Formate todos os valores monetários em Reais, usando o formato R$ X.XXX,XX (ex: R$ 42.173,01). O símbolo R$ deve ser colado ao valor.**
+7. **FIX: Ao responder, NUNCA use negrito, itálico ou formatação de fonte que possa alterar o tipo de fonte do texto. Use APENAS a formatação de código inline do Markdown (texto entre crases, ex: `Monitor 4K`) para destacar nomes de itens, IDs de produtos e valores monetários.**
 
 Responda agora:"""
     
@@ -495,6 +503,7 @@ with st.sidebar:
     # Processar uploads automaticamente
     if uploaded_files:
         new_files = []
+        # Adicionar apenas arquivos que ainda não foram carregados
         for file in uploaded_files:
             if file.name not in st.session_state.dataframes:
                 new_files.append(file)
@@ -507,6 +516,8 @@ with st.sidebar:
                         st.session_state.dataframes[file.name] = df
                     except Exception as e:
                         st.error(f"❌ Erro em {file.name}: {str(e)}")
+            st.rerun() # Reruns para garantir que a lista de arquivos atualize
+
     
     # Mostrar arquivos carregados
     if st.session_state.dataframes:
@@ -525,10 +536,10 @@ with st.sidebar:
         
         st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
         
-        # Botão limpar
-        if st.button("🗑️ Limpar Todas as Planilhas"):
-            st.session_state.dataframes = {}
-            st.session_state.chat_history = []
+        # Botão limpar - FUNÇÃO IMPLEMENTADA
+        if st.button("🗑️ Limpar Todas as Planilhas", use_container_width=True):
+            st.session_state.dataframes = {} # Limpa os DataFrames
+            st.session_state.chat_history = [] # Limpa o histórico de chat
             st.rerun()
 
 # ========== ÁREA PRINCIPAL ==========
@@ -562,6 +573,7 @@ if st.session_state.dataframes:
         
         col_btn1, col_btn2 = st.columns([4, 1])
         with col_btn2:
+            # O CSS customizado deve fazer o hover funcionar corretamente
             submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
     
     # Processar pergunta APENAS quando submit
