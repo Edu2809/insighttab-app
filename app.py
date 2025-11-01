@@ -11,9 +11,6 @@ warnings.filterwarnings('ignore')
 # ═══════════════════════════════════════════════════════════════
 # 🔑 CONFIGURAÇÃO DA API - COLOQUE SUA API KEY AQUI:
 # ═══════════════════════════════════════════════════════════════
-# ... (suas imports já OK: import os, genai, etc.)
-
-# ✅ FIX: LINHA 14 CORRIGIDA
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') # Pega do Render AUTOMATICAMENTE!
 
 if not GEMINI_API_KEY:
@@ -24,7 +21,6 @@ if not GEMINI_API_KEY:
 # Configura Gemini (vai funcionar!)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# ... resto do seu código IGUAL (MODEL_TIMEOUT, etc.)
 # ═══════════════════════════════════════════════════════════════
 
 MODEL_TIMEOUT = 60
@@ -46,8 +42,10 @@ if "dataframes" not in st.session_state:
     st.session_state.dataframes = {} # {filename: dataframe}
 if "processing" not in st.session_state:
     st.session_state.processing = False
+if "uploaded_file_keys" not in st.session_state:
+    st.session_state.uploaded_file_keys = []
 
-# ========== CSS MODO ESCURO FIXO (Incluindo FIXES para Cor e Fonte e Hover do Botão Enviar) ==========
+# ========== CSS MODO ESCURO FIXO ==========
 st.markdown(
     """
     <style>
@@ -173,15 +171,13 @@ st.markdown(
             color: var(--text-color) !important;
         }
         
-        /* FIX 1: Cor do elemento ID/Nome (código inline) para cor de fundo */
+        /* Cor do elemento ID/Nome (código inline) */
         .chat-message code {
-            /* Cor do texto do ID (T-JAN-0001, Monitor 4K) */
             color: var(--accent) !important; 
-            /* Cor de fundo do destaque */
             background-color: rgba(102, 126, 234, 0.15) !important; 
             padding: 2px 4px;
             border-radius: 4px;
-            font-family: inherit !important; /* Mantenha a mesma fonte do texto ao redor */
+            font-family: inherit !important;
             font-size: 0.9em;
         }
         
@@ -230,18 +226,19 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
 
-        /* FIX 3: Botão de Envio (do formulário) para ter o mesmo hover/cor de destaque */
-        /* Note que o Streamlit atribui um ID único a cada widget, mas podemos mirar o botão dentro do form */
+        /* Botão de Envio do formulário */
         div[data-testid="stForm"] .stButton button {
-            background: #667eea; /* Cor sólida para o botão Enviar (cor principal) */
+            background: var(--card-bg) !important;
+            color: var(--text-color) !important;
+            border: 2px solid var(--accent) !important;
             transition: all 0.3s;
         }
 
         div[data-testid="stForm"] .stButton button:hover {
-            /* Cor do hover idêntica ao gradiente de destaque dos outros botões */
             background: linear-gradient(90deg, #667eea, #764ba2) !important; 
-            transform: none; /* remove o efeito de subida no hover para o botão de enviar */
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.6); /* um box shadow de destaque */
+            border-color: transparent !important;
+            transform: none;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.6);
         }
         
         /* File uploader - MODO ESCURO */
@@ -269,6 +266,11 @@ st.markdown(
         
         [data-testid="stFileUploader"] small {
             color: var(--muted-color) !important;
+        }
+
+        /* Tradução do texto do file uploader */
+        [data-testid="stFileUploader"] span[data-testid="stMarkdownContainer"] p {
+            color: var(--text-color) !important;
         }
         
         /* DataFrames */
@@ -492,12 +494,14 @@ with st.sidebar:
     st.markdown("### 📂 Upload de Planilhas")
     st.markdown('<p style="color: var(--muted-color); font-size: 0.9em;">Carregue uma ou várias planilhas simultaneamente</p>', unsafe_allow_html=True)
     
-    # Upload múltiplo
+    # Upload múltiplo com key única
+    file_uploader_key = f"file_uploader_{len(st.session_state.uploaded_file_keys)}"
     uploaded_files = st.file_uploader(
-        "Envie seus arquivos (Excel ou CSV)",
+        "Arraste e solte os arquivos aqui",
         type=["xlsx", "xls", "csv"],
         accept_multiple_files=True,
-        label_visibility="collapsed"
+        label_visibility="visible",
+        key=file_uploader_key
     )
     
     # Processar uploads automaticamente
@@ -516,7 +520,7 @@ with st.sidebar:
                         st.session_state.dataframes[file.name] = df
                     except Exception as e:
                         st.error(f"❌ Erro em {file.name}: {str(e)}")
-            st.rerun() # Reruns para garantir que a lista de arquivos atualize
+            st.rerun()
 
     
     # Mostrar arquivos carregados
@@ -536,10 +540,11 @@ with st.sidebar:
         
         st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
         
-        # Botão limpar - FUNÇÃO IMPLEMENTADA
+        # Botão limpar - AGORA FUNCIONA
         if st.button("🗑️ Limpar Todas as Planilhas", use_container_width=True):
             st.session_state.dataframes = {} # Limpa os DataFrames
             st.session_state.chat_history = [] # Limpa o histórico de chat
+            st.session_state.uploaded_file_keys.append(time.time()) # Força nova key para o uploader
             st.rerun()
 
 # ========== ÁREA PRINCIPAL ==========
@@ -573,7 +578,6 @@ if st.session_state.dataframes:
         
         col_btn1, col_btn2 = st.columns([4, 1])
         with col_btn2:
-            # O CSS customizado deve fazer o hover funcionar corretamente
             submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
     
     # Processar pergunta APENAS quando submit
