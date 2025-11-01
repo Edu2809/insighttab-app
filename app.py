@@ -11,7 +11,20 @@ warnings.filterwarnings('ignore')
 # ═══════════════════════════════════════════════════════════════
 # 🔑 CONFIGURAÇÃO DA API - COLOQUE SUA API KEY AQUI:
 # ═══════════════════════════════════════════════════════════════
-GEMINI_API_KEY = "GEMINI_API_KEY"  # ← LINHA 14
+# ... (suas imports já OK: import os, genai, etc.)
+
+# ✅ FIX: LINHA 14 CORRIGIDA
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')  # Pega do Render AUTOMATICAMENTE!
+
+if not GEMINI_API_KEY:
+    st.error("❌ API Key GEMINI_API_KEY não encontrada!")
+    st.error("👉 Render Dashboard > Environment > Adicione: GEMINI_API_KEY = sua_chave_real")
+    st.stop()  # Para o app
+
+# Configura Gemini (vai funcionar!)
+genai.configure(api_key=GEMINI_API_KEY)
+
+# ... resto do seu código IGUAL (MODEL_TIMEOUT, etc.)
 # ═══════════════════════════════════════════════════════════════
 
 MODEL_TIMEOUT = 60
