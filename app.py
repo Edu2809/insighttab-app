@@ -226,24 +226,23 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
 
-        /* Botão de Envio do formulário - COR AZUL FORÇADA */
+        /* Botão de Envio do formulário - MODO DARK (SUBSTITUÍDO) */
         div[data-testid="stForm"] .stButton > button,
         div[data-testid="stForm"] button[kind="primary"],
         form button[kind="formSubmit"] {
-            background-color: #4a9eff !important;
-            background: #4a9eff !important;
+            background: linear-gradient(90deg, #667eea, #764ba2) !important;
             color: white !important;
             border: none !important;
             transition: all 0.3s !important;
+            font-weight: 600 !important;
         }
-
+        
         div[data-testid="stForm"] .stButton > button:hover,
         div[data-testid="stForm"] button[kind="primary"]:hover,
         form button[kind="formSubmit"]:hover {
-            background-color: #3d8de6 !important;
-            background: #3d8de6 !important;
-            transform: translateY(-1px) !important;
-            box-shadow: 0 4px 12px rgba(74, 158, 255, 0.5) !important;
+            background: linear-gradient(90deg, #7688f0, #8555b8) !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
         }
         
         /* File uploader - MODO ESCURO */
@@ -328,10 +327,21 @@ st.markdown(
         /* Tabs */
         .stTabs [data-baseweb="tab-list"] {
             background-color: var(--panel-bg) !important;
+            border-radius: 8px;
+            padding: 5px;
+            border: 1px solid rgba(255,255,255,0.05);
         }
         
         .stTabs [data-baseweb="tab"] {
             color: var(--text-color) !important;
+            background-color: transparent !important;
+            border-radius: 6px;
+        }
+
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {
+            background-color: var(--card-bg) !important;
+            border: 1px solid rgba(102, 126, 234, 0.3) !important;
+            font-weight: 600;
         }
         
         /* FORÇAR REMOÇÃO DE QUALQUER FUNDO BRANCO */
@@ -412,7 +422,7 @@ def read_uploaded_file_to_df(uploaded_file):
                 dfs = {}
                 for sheet in sheets:
                     bio.seek(0)
-                    dfs[sheet] = pd.read_excel(bio, sheet_name=sheet, engine="openpyxl")
+                    dfs[f"{uploaded_file.name} - {sheet}"] = pd.read_excel(bio, sheet_name=sheet, engine="openpyxl")
                 xl.close()
                 bio.close()
                 return dfs # Retorna dict de DataFrames
@@ -435,10 +445,10 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
     total_rows = 0
     
     for filename, df in dataframes.items():
-        if isinstance(df, dict): # Multi-sheet
+        if isinstance(df, dict): # Este caso foi removido com a nova lógica de multi-sheet, mas mantido por segurança.
             for sheet_name, sheet_df in df.items():
                 preview = sheet_df.head(5).to_string(index=False)
-                all_data += f"\n--- Planilha: {filename} | Aba: {sheet_name} ({len(sheet_df)} linhas) ---\n{preview}\n"
+                all_data += f"\n--- Planilha: {sheet_name} ({len(sheet_df)} linhas) ---\n{preview}\n"
                 total_rows += len(sheet_df)
         else:
             preview = df.head(5).to_string(index=False)
@@ -511,18 +521,27 @@ with st.sidebar:
     
     # Processar uploads automaticamente
     if uploaded_files:
-        new_files = []
+        new_files_to_process = []
         # Adicionar apenas arquivos que ainda não foram carregados
         for file in uploaded_files:
-            if file.name not in st.session_state.dataframes:
-                new_files.append(file)
+            # Verifica se o nome do arquivo *ou* suas sheets já estão em session_state.dataframes
+            if file.name not in st.session_state.dataframes and not any(file.name in key for key in st.session_state.dataframes.keys()):
+                 new_files_to_process.append(file)
         
-        if new_files:
-            with st.spinner(f"📊 Carregando {len(new_files)} arquivo(s)..."):
-                for file in new_files:
+        if new_files_to_process:
+            with st.spinner(f"📊 Carregando {len(new_files_to_process)} arquivo(s)..."):
+                for file in new_files_to_process:
                     try:
-                        df = read_uploaded_file_to_df(file)
-                        st.session_state.dataframes[file.name] = df
+                        df_result = read_uploaded_file_to_df(file)
+                        
+                        if isinstance(df_result, dict): # Multi-sheet result
+                            # Adiciona cada sheet individualmente, usando o nome completo (filename - sheetname)
+                            for sheet_name, sheet_df in df_result.items():
+                                st.session_state.dataframes[sheet_name] = sheet_df
+                        else:
+                            # Adiciona o DataFrame simples
+                            st.session_state.dataframes[file.name] = df_result
+
                     except Exception as e:
                         st.error(f"❌ Erro em {file.name}: {str(e)}")
             st.rerun()
@@ -531,17 +550,31 @@ with st.sidebar:
     # Mostrar arquivos carregados
     if st.session_state.dataframes:
         st.markdown("---")
-        st.markdown("### ✅ Planilhas Carregadas")
+        st.markdown("### ✅ Planilhas/Tabelas Carregadas")
         
         total_rows = 0
-        for filename, df in st.session_state.dataframes.items():
-            if isinstance(df, dict): # Multi-sheet
-                sheets_info = ", ".join([f"{name} ({len(sheet_df)} linhas)" for name, sheet_df in df.items()])
-                st.markdown(f"**{filename}**<br><small>{sheets_info}</small>", unsafe_allow_html=True)
-                total_rows += sum(len(sheet_df) for sheet_df in df.values())
+        
+        # Agrupar por nome do arquivo original (para multi-sheet)
+        display_info = {}
+        for full_name, df in st.session_state.dataframes.items():
+            if " - " in full_name: # Multi-sheet
+                # O nome do arquivo original é a primeira parte
+                filename = full_name.split(" - ")[0]
+                sheet_name = full_name.split(" - ")[1]
+                if filename not in display_info:
+                    display_info[filename] = {}
+                display_info[filename][sheet_name] = len(df)
+            else: # Single file
+                display_info[full_name] = {"main": len(df)}
+        
+        for filename, info in display_info.items():
+            if "main" in info and len(info) == 1:
+                st.markdown(f"**{filename}**<br><small>{info['main']} linhas</small>", unsafe_allow_html=True)
+                total_rows += info['main']
             else:
-                st.markdown(f"**{filename}**<br><small>{len(df)} linhas</small>", unsafe_allow_html=True)
-                total_rows += len(df)
+                sheets_info = ", ".join([f"{name} ({rows} linhas)" for name, rows in info.items()])
+                st.markdown(f"**{filename}**<br><small>{sheets_info}</small>", unsafe_allow_html=True)
+                total_rows += sum(info.values())
         
         st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
         
@@ -554,80 +587,130 @@ with st.sidebar:
 
 # ========== ÁREA PRINCIPAL ==========
 if st.session_state.dataframes:
-    # Área do chat PRIMEIRO
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
     
-    # Histórico de chat
-    chat_container = st.container()
-    with chat_container:
-        for chat in st.session_state.chat_history:
-            st.markdown(
-                f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
-                unsafe_allow_html=True
+    # --- Tabs de Navegação ---
+    chat_tab, data_tab = st.tabs(["💬 Chat de Análise", "🔍 Visualizar Dados"])
+
+    # -----------------------------
+    # TAB 1: Chat de Análise
+    # -----------------------------
+    with chat_tab:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        
+        # Histórico de chat
+        chat_container = st.container()
+        with chat_container:
+            for chat in st.session_state.chat_history:
+                st.markdown(
+                    f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
+                    unsafe_allow_html=True
+                )
+                st.markdown(
+                    f'<div class="chat-message bot-message"><b>🤖 InsightTab:</b><br>{chat["answer"]}</div>',
+                    unsafe_allow_html=True
+                )
+        
+        st.markdown("---")
+        
+        # Input de pergunta com form (evita duplicação)
+        with st.form(key="chat_form", clear_on_submit=True):
+            user_question = st.text_input(
+                "💭 Faça sua pergunta sobre os dados:",
+                placeholder="Ex: Qual é a média de vendas? Qual produto tem maior lucro?",
+                key="chat_input",
+                label_visibility="collapsed"
             )
-            st.markdown(
-                f'<div class="chat-message bot-message"><b>🤖 InsightTab:</b><br>{chat["answer"]}</div>',
-                unsafe_allow_html=True
+            
+            col_btn1, col_btn2 = st.columns([4, 1])
+            with col_btn2:
+                # O botão de envio agora usará o gradiente roxo/azul
+                submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
+        
+        # Processar pergunta APENAS quando submit
+        if submit_btn and user_question and not st.session_state.processing:
+            st.session_state.processing = True
+            
+            prompt = build_prompt_with_data(user_question, st.session_state.dataframes, SAMPLE_SIZE)
+            
+            with st.spinner("🤖 Analisando seus dados..."):
+                try:
+                    answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
+                except TimeoutError:
+                    answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente uma pergunta mais simples."
+                except Exception as e:
+                    answer = f"❌ Erro: {str(e)}"
+            
+            # Adicionar ao histórico
+            st.session_state.chat_history.append({
+                "question": user_question,
+                "answer": answer
+            })
+            
+            st.session_state.processing = False
+            st.rerun()
+        
+        # Botão limpar chat
+        if st.button("🧹 Limpar Conversa"):
+            st.session_state.chat_history = []
+            st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Stats boxes DEPOIS do chat
+        total_files = len(st.session_state.dataframes)
+        total_rows = sum(len(df) for df in st.session_state.dataframes.values())
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{total_files}</h2><p style="margin:0; opacity:0.8;">Tabelas</p></div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{total_rows:,}</h2><p style="margin:0; opacity:0.8;">Linhas Totais</p></div>', unsafe_allow_html=True)
+        with col3:
+            st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{len(st.session_state.chat_history)}</h2><p style="margin:0; opacity:0.8;">Perguntas</p></div>', unsafe_allow_html=True)
+
+
+    # -----------------------------
+    # TAB 2: Visualizar Dados
+    # -----------------------------
+    with data_tab:
+        st.markdown('### Detalhes dos DataFrames Carregados')
+        
+        df_options = list(st.session_state.dataframes.keys())
+        
+        if df_options:
+            selected_df_name = st.selectbox(
+                "Selecione a Tabela para Visualizar:",
+                options=df_options,
+                key="df_selector",
+                index=0
             )
-    
-    st.markdown("---")
-    
-    # Input de pergunta com form (evita duplicação)
-    with st.form(key="chat_form", clear_on_submit=True):
-        user_question = st.text_input(
-            "💭 Faça sua pergunta sobre os dados:",
-            placeholder="Ex: Qual é a média de vendas? Qual produto tem maior lucro?",
-            key="chat_input",
-            label_visibility="collapsed"
-        )
-        
-        col_btn1, col_btn2 = st.columns([4, 1])
-        with col_btn2:
-            submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
-    
-    # Processar pergunta APENAS quando submit
-    if submit_btn and user_question and not st.session_state.processing:
-        st.session_state.processing = True
-        
-        prompt = build_prompt_with_data(user_question, st.session_state.dataframes, SAMPLE_SIZE)
-        
-        with st.spinner("🤖 Analisando seus dados..."):
-            try:
-                answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
-            except TimeoutError:
-                answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente uma pergunta mais simples."
-            except Exception as e:
-                answer = f"❌ Erro: {str(e)}"
-        
-        # Adicionar ao histórico
-        st.session_state.chat_history.append({
-            "question": user_question,
-            "answer": answer
-        })
-        
-        st.session_state.processing = False
-        st.rerun()
-    
-    # Botão limpar chat
-    if st.button("🧹 Limpar Conversa"):
-        st.session_state.chat_history = []
-        st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Stats boxes DEPOIS do chat
-    total_files = len(st.session_state.dataframes)
-    total_rows = sum(len(df) if not isinstance(df, dict) else sum(len(s) for s in df.values()) for df in st.session_state.dataframes.values())
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{total_files}</h2><p style="margin:0; opacity:0.8;">Planilhas</p></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{total_rows:,}</h2><p style="margin:0; opacity:0.8;">Linhas Totais</p></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{len(st.session_state.chat_history)}</h2><p style="margin:0; opacity:0.8;">Perguntas</p></div>', unsafe_allow_html=True)
+
+            df_to_display = st.session_state.dataframes[selected_df_name]
+            
+            st.markdown("---")
+            
+            st.markdown(f'#### 📄 Tabela: `{selected_df_name}`')
+            st.markdown(f'**{len(df_to_display)}** linhas, **{len(df_to_display.columns)}** colunas.')
+            
+            # Informações resumidas
+            col_info1, col_info2 = st.columns(2)
+            with col_info1:
+                st.markdown('##### Tipos de Dados (dtype)')
+                st.dataframe(df_to_display.dtypes.astype(str).reset_index().rename(columns={0: 'Tipo', 'index': 'Coluna'}), use_container_width=True, hide_index=True)
+            
+            with col_info2:
+                st.markdown('##### Valores Ausentes (NaN)')
+                missing_values = df_to_display.isnull().sum().reset_index().rename(columns={0: 'Faltantes', 'index': 'Coluna'})
+                missing_values['%'] = (missing_values['Faltantes'] / len(df_to_display) * 100).round(2).astype(str) + '%'
+                st.dataframe(missing_values, use_container_width=True, hide_index=True)
+
+
+            st.markdown('---')
+            st.markdown('##### Amostra do DataFrame (Primeiras 100 Linhas)')
+            # Visualizar o DataFrame
+            st.dataframe(df_to_display.head(100), use_container_width=True)
 
 else:
     # Tela inicial (sem dados) - MAS COM CHAT
@@ -657,6 +740,7 @@ else:
         
         col_btn1, col_btn2 = st.columns([4, 1])
         with col_btn2:
+            # O botão de envio agora usará o gradiente roxo/azul
             submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
     
     if submit_btn and user_question and not st.session_state.processing:
