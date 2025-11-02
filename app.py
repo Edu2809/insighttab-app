@@ -658,12 +658,24 @@ with st.sidebar:
         
         st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
         
-        # Botão para limpar planilhas
-        if st.button("🗑️ Limpar Todas as Planilhas", use_container_width=True):
-            st.session_state.dataframes = {}
-            st.session_state.chat_history = []
-            st.session_state.uploaded_file_keys.append(time.time())
-            st.rerun()
+        # Botão para limpar apenas planilhas manuais (não do Google Sheets)
+        # Verificar se existem planilhas manuais (sem os meses do Google Sheets)
+        has_manual_sheets = any(
+            not any(month in filename for month in ["Janeiro", "Fevereiro", "Março"])
+            for filename in st.session_state.dataframes.keys()
+        )
+        
+        if has_manual_sheets:
+            if st.button("🗑️ Limpar Planilhas Manuais", use_container_width=True):
+                # Manter apenas planilhas do Google Sheets
+                google_sheets_data = {
+                    k: v for k, v in st.session_state.dataframes.items()
+                    if any(month in k for month in ["Janeiro", "Fevereiro", "Março"])
+                }
+                st.session_state.dataframes = google_sheets_data
+                st.session_state.uploaded_file_keys.append(time.time())
+                st.success("✅ Planilhas manuais removidas!")
+                st.rerun()
 
 # ========== ÁREA PRINCIPAL - CHAT ==========
 if st.session_state.dataframes:
