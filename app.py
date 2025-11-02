@@ -33,7 +33,7 @@ SHEET_IDS = {
       "Dezembro 2024": os.getenv('GOOGLE_SHEET_ID_DEZEMBRO'),
 }
     
-}
+
 
 # Validar API Keys
 if not GEMINI_API_KEY:
