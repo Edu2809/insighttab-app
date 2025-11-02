@@ -227,7 +227,8 @@ st.markdown(
         }
 
         /* BOTÃO DE ENVIAR (azul escuro com texto branco) */
-        div[data-testid="stForm"] button[kind="formSubmit"] {
+        div[data-testid="stForm"] button[kind="formSubmit"],
+        button[kind="formSubmit"] {
             background: #1a3a5c !important; /* Azul escuro */
             color: white !important;
             border: none !important;
@@ -235,13 +236,21 @@ st.markdown(
             font-weight: 600 !important;
             padding: 10px 20px !important;
             transition: all 0.3s !important;
-            display: inline-block !important; /* Garante que o botão apareça */
+            display: inline-block !important;
+            min-width: 120px !important;
         }
         
-        div[data-testid="stForm"] button[kind="formSubmit"]:hover {
+        div[data-testid="stForm"] button[kind="formSubmit"]:hover,
+        button[kind="formSubmit"]:hover {
             background: #2d5a8a !important; /* Azul escuro mais claro no hover */
             transform: translateY(-2px) !important;
             box-shadow: 0 4px 12px rgba(26, 58, 92, 0.6) !important;
+        }
+        
+        /* Forçar cor do texto do botão */
+        div[data-testid="stForm"] button[kind="formSubmit"] p,
+        button[kind="formSubmit"] p {
+            color: white !important;
         }
         
         /* File uploader - MODO ESCURO */
