@@ -22,6 +22,17 @@ SHEET_IDS = {
     "Janeiro 2024": os.getenv('GOOGLE_SHEET_ID_JANEIRO'),
     "Fevereiro 2024": os.getenv('GOOGLE_SHEET_ID_FEVEREIRO'),
     "Março 2024": os.getenv('GOOGLE_SHEET_ID_MARCO'),
+    "Abril 2024": os.getenv('GOOGLE_SHEET_ID_ABRIL'),
+    "Maio 2024": os.getenv('GOOGLE_SHEET_ID_MAIO'),
+    "Junho 2024": os.getenv('GOOGLE_SHEET_ID_JUNHO'),
+    "Julho 2024": os.getenv('GOOGLE_SHEET_ID_JULHO'),
+      "Agosto 2024": os.getenv('GOOGLE_SHEET_ID_AGOSTO'),
+        "Setembro 2024": os.getenv('GOOGLE_SHEET_ID_SETEMBRO'),
+      "Outubro 2024": os.getenv('GOOGLE_SHEET_ID_OUTUBRO'),
+    "Novembro 2024": os.getenv('GOOGLE_SHEET_ID_NOVEMBRO'),
+      "Dezembro 2024": os.getenv('GOOGLE_SHEET_ID_DEZEMBRO'),
+}
+    
 }
 
 # Validar API Keys
