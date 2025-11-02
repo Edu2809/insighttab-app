@@ -226,10 +226,15 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
 
-        /* BOTÃO DE ENVIAR (azul escuro com texto branco) */
+        /* BOTÃO DE ENVIAR (azul escuro com texto branco) - FORÇADO */
         div[data-testid="stForm"] button[kind="formSubmit"],
-        button[kind="formSubmit"] {
+        button[kind="formSubmit"],
+        .stFormSubmitButton button,
+        .stFormSubmitButton > button,
+        div[data-testid="stForm"] > div > div > button {
             background: #1a3a5c !important; /* Azul escuro */
+            background-color: #1a3a5c !important;
+            background-image: none !important;
             color: white !important;
             border: none !important;
             border-radius: 8px !important;
@@ -241,15 +246,23 @@ st.markdown(
         }
         
         div[data-testid="stForm"] button[kind="formSubmit"]:hover,
-        button[kind="formSubmit"]:hover {
+        button[kind="formSubmit"]:hover,
+        .stFormSubmitButton button:hover,
+        .stFormSubmitButton > button:hover,
+        div[data-testid="stForm"] > div > div > button:hover {
             background: #2d5a8a !important; /* Azul escuro mais claro no hover */
+            background-color: #2d5a8a !important;
+            background-image: none !important;
             transform: translateY(-2px) !important;
             box-shadow: 0 4px 12px rgba(26, 58, 92, 0.6) !important;
         }
         
-        /* Forçar cor do texto do botão */
-        div[data-testid="stForm"] button[kind="formSubmit"] p,
-        button[kind="formSubmit"] p {
+        /* Forçar cor do texto do botão e todos os elementos internos */
+        div[data-testid="stForm"] button[kind="formSubmit"] *,
+        button[kind="formSubmit"] *,
+        .stFormSubmitButton button *,
+        .stFormSubmitButton button p,
+        div[data-testid="stForm"] button p {
             color: white !important;
         }
         
