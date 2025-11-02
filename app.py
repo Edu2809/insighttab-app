@@ -26,14 +26,15 @@ SHEET_IDS = {
     "Maio 2024": os.getenv('GOOGLE_SHEET_ID_MAIO'),
     "Junho 2024": os.getenv('GOOGLE_SHEET_ID_JUNHO'),
     "Julho 2024": os.getenv('GOOGLE_SHEET_ID_JULHO'),
-      "Agosto 2024": os.getenv('GOOGLE_SHEET_ID_AGOSTO'),
-        "Setembro 2024": os.getenv('GOOGLE_SHEET_ID_SETEMBRO'),
-      "Outubro 2024": os.getenv('GOOGLE_SHEET_ID_OUTUBRO'),
+    "Agosto 2024": os.getenv('GOOGLE_SHEET_ID_AGOSTO'),
+    "Setembro 2024": os.getenv('GOOGLE_SHEET_ID_SETEMBRO'),
+    "Outubro 2024": os.getenv('GOOGLE_SHEET_ID_OUTUBRO'),
     "Novembro 2024": os.getenv('GOOGLE_SHEET_ID_NOVEMBRO'),
-      "Dezembro 2024": os.getenv('GOOGLE_SHEET_ID_DEZEMBRO'),
+    "Dezembro 2024": os.getenv('GOOGLE_SHEET_ID_DEZEMBRO'),
 }
-    
 
+# Lista de nomes das planilhas do Google Sheets (para identificação)
+GOOGLE_SHEETS_NAMES = list(SHEET_IDS.keys())
 
 # Validar API Keys
 if not GEMINI_API_KEY:
@@ -534,6 +535,14 @@ def read_uploaded_file_to_df(uploaded_file):
     except Exception as e:
         raise Exception(f"Erro ao ler arquivo: {str(e)}")
 
+def is_google_sheets_data(filename):
+    """Verifica se uma planilha veio do Google Sheets"""
+    # Verifica se o nome começa com algum dos nomes das planilhas do Google Sheets
+    for sheet_name in GOOGLE_SHEETS_NAMES:
+        if filename.startswith(sheet_name):
+            return True
+    return False
+
 def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
     """Constrói prompt com dados das planilhas"""
     if not dataframes:
@@ -658,8 +667,8 @@ with st.sidebar:
         
         for filename, df in st.session_state.dataframes.items():
             rows = len(df)
-            # Identificar origem
-            if any(month in filename for month in ["Janeiro", "Fevereiro", "Março"]):
+            # Identificar origem usando a nova função
+            if is_google_sheets_data(filename):
                 badge = "☁️"  # Google Sheets
             else:
                 badge = "📄"  # Upload manual
@@ -669,19 +678,18 @@ with st.sidebar:
         
         st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
         
-        # Botão para limpar apenas planilhas manuais (não do Google Sheets)
-        # Verificar se existem planilhas manuais (sem os meses do Google Sheets)
+        # Verificar se existem planilhas manuais usando a nova função
         has_manual_sheets = any(
-            not any(month in filename for month in ["Janeiro", "Fevereiro", "Março"])
+            not is_google_sheets_data(filename)
             for filename in st.session_state.dataframes.keys()
         )
         
         if has_manual_sheets:
             if st.button("🗑️ Limpar Planilhas Manuais", use_container_width=True):
-                # Manter apenas planilhas do Google Sheets
+                # Manter apenas planilhas do Google Sheets usando a nova função
                 google_sheets_data = {
                     k: v for k, v in st.session_state.dataframes.items()
-                    if any(month in k for month in ["Janeiro", "Fevereiro", "Março"])
+                    if is_google_sheets_data(k)
                 }
                 st.session_state.dataframes = google_sheets_data
                 st.session_state.uploaded_file_keys.append(time.time())
