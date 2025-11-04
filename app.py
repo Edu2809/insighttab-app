@@ -694,13 +694,44 @@ st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', un
 
 # ========== BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR ==========
 st.markdown("""
-    <button class="sidebar-toggle-btn" onclick="
-        const sidebar = window.parent.document.querySelector('[data-testid=stSidebar]');
-        const collapsedControl = window.parent.document.querySelector('[data-testid=collapsedControl]');
-        if (collapsedControl) {
-            collapsedControl.click();
+    <script>
+        // Função para abrir a sidebar
+        function toggleSidebar() {
+            // Tentar encontrar o botão de colapso da sidebar
+            const collapsedControl = window.parent.document.querySelector('[data-testid="collapsedControl"]');
+            
+            if (collapsedControl) {
+                // Simular clique no botão
+                collapsedControl.click();
+            } else {
+                // Alternativa: tentar encontrar o botão do header
+                const headerButton = window.parent.document.querySelector('button[kind="header"]');
+                if (headerButton) {
+                    headerButton.click();
+                }
+            }
         }
-    ">
+        
+        // Verificar se a sidebar está visível
+        function isSidebarOpen() {
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar) return false;
+            
+            // Verificar se a sidebar tem a classe ou atributo que indica que está aberta
+            const isCollapsed = sidebar.getAttribute('aria-expanded') === 'false';
+            return !isCollapsed;
+        }
+        
+        // Atualizar visibilidade do botão
+        setInterval(function() {
+            const customBtn = document.querySelector('.sidebar-toggle-btn');
+            if (customBtn) {
+                customBtn.style.display = isSidebarOpen() ? 'none' : 'flex';
+            }
+        }, 100);
+    </script>
+    
+    <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">
             <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/>
         </svg>
