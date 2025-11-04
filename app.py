@@ -129,7 +129,7 @@ st.set_page_config(
     page_title="InsightTab - Analista Inteligente",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed" # MANTIDO 'collapsed' PARA O BOTÃO SER ÚTIL
 )
 
 # ========== ESTADO INICIAL ==========
@@ -236,7 +236,12 @@ st.markdown(
 
     /* Esconder botão quando sidebar está aberta */
     [data-testid="stSidebar"][aria-expanded="true"] ~ div .sidebar-toggle-btn {
-        display: none;
+        display: none !important;
+    }
+    
+    /* Mostrar botão quando sidebar está fechada */
+    [data-testid="stSidebar"][aria-expanded="false"] ~ div .sidebar-toggle-btn {
+        display: flex !important;
     }
 
     /* Botão de abrir/fechar sidebar - EXTERNO */
@@ -251,7 +256,7 @@ st.markdown(
 
     /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
     [data-testid="collapsedControl"] {
-        display: none !important;
+        display: none !important; /* MANTIDO HIDDEN para usar o botão customizado */
     }
 
     /* Botão do menu superior (fora da sidebar) */
@@ -685,40 +690,26 @@ st.markdown("""
 <script>
 // Função para abrir a sidebar
 function toggleSidebar() {
-    // Tentar encontrar o botão de colapso da sidebar
+    // Tentar encontrar o botão de colapso da sidebar (o hamburguer externo)
+    // Streamlit usa um MutationObserver para lidar com isso, mas podemos tentar
+    // encontrar os botões de toggle internos que Streamlit usa no header.
     const collapsedControl = window.parent.document.querySelector('[data-testid="collapsedControl"]');
     if (collapsedControl) {
-        // Simular clique no botão
+        // Simular clique no botão de colapso
         collapsedControl.click();
     } else {
-        // Alternativa: tentar encontrar o botão do header
+        // Alternativa: tentar encontrar o botão de toggle no header (geralmente é o hamburguer/seta)
+        // Isso é menos confiável em diferentes versões do Streamlit.
         const headerButton = window.parent.document.querySelector('button[kind="header"]');
         if (headerButton) {
             headerButton.click();
         }
     }
 }
-
-// Verificar se a sidebar está visível
-function isSidebarOpen() {
-    const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-    if (!sidebar) return false;
-    // Verificar se a sidebar tem a classe ou atributo que indica que está aberta
-    const isCollapsed = sidebar.getAttribute('aria-expanded') === 'false';
-    return !isCollapsed;
-}
-
-// Atualizar visibilidade do botão
-setInterval(function() {
-    const customBtn = document.querySelector('.sidebar-toggle-btn');
-    if (customBtn) {
-        customBtn.style.display = isSidebarOpen() ? 'none' : 'flex';
-    }
-}, 100);
 </script>
 <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">
-        <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="white"/>
     </svg>
 </button>
 """, unsafe_allow_html=True)
@@ -930,12 +921,17 @@ else:
             </p>
             <div style="background: var(--card-bg); padding: 20px; border-radius: 10px; max-width: 600px; margin: 0 auto;">
                 <h3 style="color: var(--text-color); margin-top: 0;">🚀 Como usar:</h3>
-                <ol style="text-align: left; color: var(--text-color); line-height: 1.8;">
-                    <li>Clique no botão roxo no canto superior esquerdo para abrir o menu</li>
-                    <li>Faça upload de uma ou mais planilhas (Excel/CSV)</li>
-                    <li>Os dados serão carregados automaticamente</li>
-                    <li>Digite sua pergunta no chat acima</li>
-                    <li>A IA analisa e responde baseado nos seus dados</li>
+                <ol style="text-align: left; color: var(--text-color">
+        """,
+        unsafe_allow_html=True
+    )
+    # A última tag não está fechada, continuando a lista em Python...
+    st.markdown(
+        """
+                <li>Clique no botão <span style='font-size: 1.2em; font-weight: bold;'>&lt;</span> no canto superior esquerdo para abrir a barra lateral.</li>
+                <li>Conecte-se ao Google Sheets ou faça upload de arquivos Excel/CSV.</li>
+                <li>Digite sua pergunta na caixa de chat (ex: 'Qual a receita total em Janeiro?').</li>
+                <li>O InsightTab analisa seus dados e fornece a resposta.</li>
                 </ol>
             </div>
         </div>
