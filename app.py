@@ -201,7 +201,7 @@ st.markdown(
             color: var(--text-color) !important;
         }
         
-        /* Botão de abrir/fechar sidebar */
+        /* Botão de abrir/fechar sidebar - EXTERNO */
         button[kind="header"] {
             color: white !important;
         }
@@ -211,7 +211,7 @@ st.markdown(
             stroke: white !important;
         }
         
-        /* Ícone do botão hamburguer */
+        /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
         [data-testid="collapsedControl"] {
             color: white !important;
         }
@@ -219,6 +219,29 @@ st.markdown(
         [data-testid="collapsedControl"] svg {
             fill: white !important;
             stroke: white !important;
+        }
+        
+        /* Botão do menu superior (fora da sidebar) */
+        header[data-testid="stHeader"] button {
+            color: white !important;
+        }
+        
+        header[data-testid="stHeader"] button svg {
+            fill: white !important;
+            stroke: white !important;
+        }
+        
+        /* Forçar todos os botões do header */
+        [data-testid="stHeader"] button[kind="header"],
+        [data-testid="stHeader"] button {
+            color: white !important;
+        }
+        
+        [data-testid="stHeader"] button[kind="header"] svg,
+        [data-testid="stHeader"] button svg {
+            fill: white !important;
+            stroke: white !important;
+            color: white !important;
         }
         
         /* Header principal com ícone de estrela */
@@ -750,17 +773,20 @@ if st.session_state.dataframes:
     if submit and user_question and not st.session_state.processing:
         st.session_state.processing = True
         
+        # Adicionar a pergunta ao histórico ANTES de processar
+        st.session_state.chat_history.append({"question": user_question, "answer": "🤖 Analisando..."})
+        
         prompt = build_prompt_with_data(user_question, st.session_state.dataframes)
         
-        with st.spinner("🤖 Analisando..."):
-            try:
-                answer = call_model_with_timeout(prompt)
-            except TimeoutError:
-                answer = "⏱️ Tempo limite atingido. Tente uma pergunta mais simples."
-            except Exception as e:
-                answer = f"❌ Erro: {str(e)}"
+        try:
+            answer = call_model_with_timeout(prompt)
+        except TimeoutError:
+            answer = "⏱️ Tempo limite atingido. Tente uma pergunta mais simples."
+        except Exception as e:
+            answer = f"❌ Erro: {str(e)}"
         
-        st.session_state.chat_history.append({"question": user_question, "answer": answer})
+        # Atualizar a última resposta no histórico
+        st.session_state.chat_history[-1]["answer"] = answer
         st.session_state.processing = False
         st.rerun()
 
@@ -813,20 +839,21 @@ else:
     
     if submit_btn and user_question and not st.session_state.processing:
         st.session_state.processing = True
+        
+        # Adicionar a pergunta ao histórico ANTES de processar
+        st.session_state.chat_history.append({"question": user_question, "answer": "🤖 Analisando..."})
+        
         prompt = build_prompt_with_data(user_question, None)
         
-        with st.spinner("🤖 Analisando..."):
-            try:
-                answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
-            except TimeoutError:
-                answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente novamente."
-            except Exception as e:
-                answer = f"❌ Erro: {str(e)}"
+        try:
+            answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
+        except TimeoutError:
+            answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente novamente."
+        except Exception as e:
+            answer = f"❌ Erro: {str(e)}"
         
-        st.session_state.chat_history.append({
-            "question": user_question,
-            "answer": answer
-        })
+        # Atualizar a última resposta no histórico
+        st.session_state.chat_history[-1]["answer"] = answer
         st.session_state.processing = False
         st.rerun()
     
