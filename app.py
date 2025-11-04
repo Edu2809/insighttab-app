@@ -241,7 +241,7 @@ st.markdown(
         justify-content: center !important;
     }
     [data-testid="collapsedControl"] svg {
-        fill: #0b1116 !important;
+        fill: white !important;
         width: 24px !important;
         height: 24px !important;
     }
