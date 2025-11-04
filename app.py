@@ -512,13 +512,20 @@ st.markdown(
         background: var(--accent);
     }
 /* Forçar ícones ou textos com a classe .texto-branco a ficarem brancos */
-.texto-branco, 
-.texto-branco svg, 
-.texto-branco path {
-    color: white !important;
-    fill: white !important;
-    stroke: white !important;
-}
+    .texto-branco, 
+    .texto-branco svg, 
+    .texto-branco path {
+        color: white !important;
+        fill: white !important;
+        stroke: white !important;
+    }
+
+    /* Forçar cor branca em todos os ícones padrão do Streamlit keyboard_double_arrow_right */
+    span[data-testid="stIconMaterial"] {
+        color: white !important;
+        fill: white !important;
+        stroke: white !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
