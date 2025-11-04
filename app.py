@@ -244,7 +244,14 @@ st.markdown(
     width: 24px !important;
     height: 24px !important;
 }
-
+/* Estilização específica para o ícone da flecha/seta inspecionado */
+.stButton button span[data-testid="stControle"] span[class*="keyboard_double_arrow_right"],
+.sidebar-toggle-btn span[class*="keyboard_double_arrow_right"],
+.sidebar-toggle-btn span[class*="double_arrow_right"] {
+    color: white !important;
+    fill: white !important;
+    -webkit-text-fill-color: white !important;
+}
 }
     }
     [data-testid="collapsedControl"]:hover {
