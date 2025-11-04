@@ -183,7 +183,7 @@ st.markdown(
         top: 20px;
         left: 20px;
         z-index: 999999;
-        background: linear-gradient(135deg, #ff6f61, #ffcc00); /* GRADIENTE VISÍVEL */
+        background: linear-gradient(135deg, #667eea, #764ba2);
         border: none;
         border-radius: 10px;
         width: 50px;
@@ -192,27 +192,27 @@ st.markdown(
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 12px rgba(255, 111, 97, 0.6);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         transition: all 0.3s ease;
     }
     .sidebar-toggle-btn:hover {
         transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(255, 111, 97, 0.8);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
     }
     .sidebar-toggle-btn svg {
-        fill: #0b1116; /* Ícone escuro para contrastar com botão claro */
+        fill: white;
         width: 24px;
         height: 24px;
     }
-    /* Esconder botão quando sidebar está aberta */
+    /* Esconder botão customizado quando sidebar está aberta */
     [data-testid="stSidebar"][aria-expanded="true"] ~ div .sidebar-toggle-btn {
         display: none !important;
     }
-    /* Mostrar botão quando sidebar está fechada */
+   
+    /* Mostrar botão customizado quando sidebar está fechada */
     [data-testid="stSidebar"][aria-expanded="false"] ~ div .sidebar-toggle-btn {
         display: flex !important;
     }
-   
     /* Botão de abrir/fechar sidebar - EXTERNO */
     button[kind="header"] {
         color: white !important;
@@ -603,12 +603,10 @@ st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', un
 st.markdown("""
 <script>
 function toggleSidebar() {
-    // 1. Procurar pelo botão que aparece no canto superior esquerdo do header, que o Streamlit usa para abrir a sidebar.
-    // Este botão é o único que permanece visível quando a sidebar está colapsada.
-    const headerButton = window.parent.document.querySelector('[data-testid="stHeader"] button');
-    if (headerButton) {
-        // Simular o clique no botão do Streamlit
-        headerButton.click();
+    // Alterado para selecionar o collapsedControl em vez do header button
+    const toggleButton = window.parent.document.querySelector('[data-testid="collapsedControl"]');
+    if (toggleButton) {
+        toggleButton.click();
     } else {
         console.error("Não foi possível encontrar o botão de toggle do Streamlit.");
     }
