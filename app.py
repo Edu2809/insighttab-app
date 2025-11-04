@@ -215,7 +215,7 @@ st.markdown(
     }
     /* Botão de abrir/fechar sidebar - EXTERNO */
     button[kind="header"] {
-        color: purple !important;
+        color: white !important;
     }
     button[kind="header"] svg {
         fill: white !important;
@@ -223,12 +223,31 @@ st.markdown(
     }
     /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
     [data-testid="collapsedControl"] {
-        opacity: 0 !important;
-        pointer-events: none !important;
+        background: linear-gradient(135deg, #667eea, #764ba2) !important;
+        border: none !important;
+        border-radius: 10px !important;
+        width: 50px !important;
+        height: 50px !important;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+        transition: all 0.3s ease !important;
+    }
+    [data-testid="collapsedControl"]:hover {
+        transform: scale(1.1) !important;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
+    }
+    [data-testid="collapsedControl"] > div {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    [data-testid="collapsedControl"] svg {
+        fill: white !important;
+        width: 24px !important;
+        height: 24px !important;
     }
     /* Botão do menu superior (fora da sidebar) */
     header[data-testid="stHeader"] button {
-        color: purple !important;
+        color: white !important;
     }
     header[data-testid="stHeader"] button svg {
         fill: white !important;
@@ -599,37 +618,6 @@ def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
     raise last_exc
 # ========== HEADER ==========
 st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', unsafe_allow_html=True)
-# ========== BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR ==========
-st.markdown("""
-<script>
-function toggleSidebar() {
-    const doc = window.parent.document;
-    const sidebar = doc.querySelector('[data-testid="stSidebar"]');
-    const toggle = doc.querySelector('[data-testid="collapsedControl"]');
-
-    // Se a sidebar está colapsada, tenta abrir
-    if (sidebar && sidebar.getAttribute("aria-expanded") === "false") {
-        if (toggle) {
-            toggle.style.pointerEvents = "auto";
-            toggle.style.opacity = "1";
-            toggle.click();
-        } else {
-            console.warn("Botão nativo de toggle não encontrado.");
-        }
-    } else if (sidebar && sidebar.getAttribute("aria-expanded") === "true") {
-        // Se quiser fechar quando clicar de novo
-        if (toggle) toggle.click();
-    }
-}
-</script>
-
-<button id="sidebar-toggle-btn" class="sidebar-toggle-btn" onclick="toggleSidebar()">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="white"/>
-    </svg>
-</button>
-""", unsafe_allow_html=True)
-
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.markdown("### 📂 Gerenciar Dados")
