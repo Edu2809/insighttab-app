@@ -223,8 +223,8 @@ st.markdown(
     }
     /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
     [data-testid="collapsedControl"] {
-        /* MANTIDO HIDDEN para garantir que o botão customizado seja usado */
-        display: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
     /* Botão do menu superior (fora da sidebar) */
     header[data-testid="stHeader"] button {
@@ -603,7 +603,6 @@ st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', un
 st.markdown("""
 <script>
 function toggleSidebar() {
-    // Alterado para selecionar o collapsedControl em vez do header button
     const toggleButton = window.parent.document.querySelector('[data-testid="collapsedControl"]');
     if (toggleButton) {
         toggleButton.click();
@@ -612,11 +611,24 @@ function toggleSidebar() {
     }
 }
 </script>
-<button class="sidebar-toggle-btn" onclick="toggleSidebar()">
+<button id="sidebar-toggle-btn" class="sidebar-toggle-btn" onclick="toggleSidebar()">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
         <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="white"/>
     </svg>
 </button>
+<script>
+const nativeButton = window.parent.document.querySelector('[data-testid="collapsedControl"]');
+const customButton = window.parent.document.querySelector('#sidebar-toggle-btn');
+if (nativeButton && customButton) {
+    const rect = nativeButton.getBoundingClientRect();
+    customButton.style.position = 'fixed';
+    customButton.style.top = `${rect.top}px`;
+    customButton.style.left = `${rect.left}px`;
+    customButton.style.width = `${rect.width}px`;
+    customButton.style.height = `${rect.height}px`;
+    customButton.style.borderRadius = window.parent.getComputedStyle(nativeButton).borderRadius;
+}
+</script>
 """, unsafe_allow_html=True)
 # ========== SIDEBAR ==========
 with st.sidebar:
