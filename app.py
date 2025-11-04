@@ -177,37 +177,32 @@ st.markdown(
     [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] div {
         color: var(--text-color) !important;
     }
-   /* BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR */
-    .sidebar-toggle-btn {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 999999;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        border: none;
-        border-radius: 10px;
-        width: 50px;
-        height: 50px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        transition: all 0.3s ease;
-    }
-    .sidebar-toggle-btn:hover {
-        transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-    }
-    .sidebar-toggle-btn svg {
-        fill: white !important; /* <--- ALTERADO: Adicionado !important */
-        width: 24px;
-        height: 24px;
-    }
-    /* Garantir cor branca para qualquer elemento dentro do botão customizado */
-    .sidebar-toggle-btn * {
-        color: white !important; /* <--- NOVO: Adicionado para ícones de fonte */
-    }
+    /* BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR */
+    .sidebar-toggle-btn {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 999999;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border: none;
+        border-radius: 10px;
+        width: 50px;
+        height: 50px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s ease;
+    }
+    .sidebar-toggle-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+    .sidebar-toggle-btn svg {
+        fill: white;
+        width: 24px;
+        height: 24px;
     }
     /* Esconder botão customizado quando sidebar está aberta */
     [data-testid="stSidebar"][aria-expanded="true"] ~ div .sidebar-toggle-btn {
@@ -244,14 +239,7 @@ st.markdown(
     width: 24px !important;
     height: 24px !important;
 }
-/* Estilização específica para o ícone da flecha/seta inspecionado */
-.stButton button span[data-testid="stControle"] span[class*="keyboard_double_arrow_right"],
-.sidebar-toggle-btn span[class*="keyboard_double_arrow_right"],
-.sidebar-toggle-btn span[class*="double_arrow_right"] {
-    color: white !important;
-    fill: white !important;
-    -webkit-text-fill-color: white !important;
-}
+
 }
     }
     [data-testid="collapsedControl"]:hover {
@@ -523,6 +511,14 @@ st.markdown(
     ::-webkit-scrollbar-thumb:hover {
         background: var(--accent);
     }
+/* Forçar ícones ou textos com a classe .texto-branco a ficarem brancos */
+.texto-branco, 
+.texto-branco svg, 
+.texto-branco path {
+    color: white !important;
+    fill: white !important;
+    stroke: white !important;
+}
     </style>
     """,
     unsafe_allow_html=True,
