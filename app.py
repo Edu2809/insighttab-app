@@ -19,7 +19,6 @@ GOOGLE_SHEETS_CREDENTIALS = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
 
 # IDs das planilhas no Google Sheets
 SHEET_IDS = {
-    # LINHA 22 CORRIGIDA: Recuo corrigido de U+00A0 para 4 espaços
     "Janeiro 2024": os.getenv('GOOGLE_SHEET_ID_JANEIRO'),
     "Fevereiro 2024": os.getenv('GOOGLE_SHEET_ID_FEVEREIRO'),
     "Março 2024": os.getenv('GOOGLE_SHEET_ID_MARCO'),
@@ -126,7 +125,8 @@ MAX_OUTPUT_TOKENS = 1024
 st.set_page_config(
     page_title="InsightTab - Analista Inteligente", 
     page_icon="📊", 
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 # ========== ESTADO INICIAL ==========
@@ -202,13 +202,46 @@ st.markdown(
             color: var(--text-color) !important;
         }
         
-        /* Botão de abrir/fechar sidebar - EXTERNO (NOVO)*/
-        /* Garante que o texto do botão seja branco */
+        /* BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR */
+        .sidebar-toggle-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 999999;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 10px;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar-toggle-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .sidebar-toggle-btn svg {
+            fill: white;
+            width: 24px;
+            height: 24px;
+        }
+        
+        /* Esconder botão quando sidebar está aberta */
+        [data-testid="stSidebar"][aria-expanded="true"] ~ div .sidebar-toggle-btn {
+            display: none;
+        }
+        
+        /* Botão de abrir/fechar sidebar - EXTERNO */
         button[kind="header"] {
             color: white !important;
         }
         
-        /* Garante que o ícone (seu ícone de seta) seja branco quando a sidebar está aberta (NOVO) */
         button[kind="header"] svg {
             fill: white !important;
             stroke: white !important;
@@ -219,7 +252,6 @@ st.markdown(
             color: white !important;
         }
         
-        /* Garante que o ícone do hamburguer seja branco (NOVO) */
         [data-testid="collapsedControl"] svg {
             fill: white !important;
             stroke: white !important;
@@ -660,6 +692,21 @@ def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
 # ========== HEADER ==========
 st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', unsafe_allow_html=True)
 
+# ========== BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR ==========
+st.markdown("""
+    <button class="sidebar-toggle-btn" onclick="
+        const sidebar = window.parent.document.querySelector('[data-testid=stSidebar]');
+        const collapsedControl = window.parent.document.querySelector('[data-testid=collapsedControl]');
+        if (collapsedControl) {
+            collapsedControl.click();
+        }
+    ">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">
+            <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/>
+        </svg>
+    </button>
+""", unsafe_allow_html=True)
+
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.markdown("### 📂 Gerenciar Dados")
@@ -883,21 +930,13 @@ else:
             <div style="background: var(--card-bg); padding: 20px; border-radius: 10px; max-width: 600px; margin: 0 auto;">
                 <h3 style="color: var(--text-color); margin-top: 0;">🚀 Como usar:</h3>
                 <ol style="text-align: left; color: var(--text-color); line-height: 1.8;">
+                    <li>Clique no botão roxo no canto superior esquerdo para abrir o menu</li>
                     <li>Faça upload de uma ou mais planilhas (Excel/CSV)</li>
                     <li>Os dados serão carregados automaticamente</li>
                     <li>Digite sua pergunta no chat acima</li>
                     <li>A IA analisa e responde baseado nos seus dados</li>
                 </ol>
             </div>
-            <style>
-            /* Ícone lateral (menu hamburguer / seta de abrir sidebar) - branco */
-            [data-testid="collapsedControl"],
-            [data-testid="collapsedControl"] svg {
-            color: white !important;
-            fill: white !important;
-            stroke: white !important;
-            opacity: 1 !important;
-        }
-    </style>
-    """
+        </div>
+        """
     , unsafe_allow_html=True)
