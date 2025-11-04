@@ -215,7 +215,7 @@ st.markdown(
     }
     /* Botão de abrir/fechar sidebar - EXTERNO */
     button[kind="header"] {
-        color: Purple !important;
+        color: purple !important;
     }
     button[kind="header"] svg {
         fill: white !important;
@@ -228,7 +228,7 @@ st.markdown(
     }
     /* Botão do menu superior (fora da sidebar) */
     header[data-testid="stHeader"] button {
-        color: white !important;
+        color: purple !important;
     }
     header[data-testid="stHeader"] button svg {
         fill: white !important;
