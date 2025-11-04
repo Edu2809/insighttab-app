@@ -141,6 +141,8 @@ if "processing" not in st.session_state:
     st.session_state.processing = False
 if "uploaded_file_keys" not in st.session_state:
     st.session_state.uploaded_file_keys = []
+if "sidebar_open" not in st.session_state:
+    st.session_state.sidebar_open = False
 
 # ========== CSS MODO ESCURO FIXO ==========
 st.markdown(
@@ -692,50 +694,49 @@ def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
 # ========== HEADER ==========
 st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', unsafe_allow_html=True)
 
-# ========== BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR ==========
+# ========== BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR (VERSÃO STREAMLIT) ==========
+# Criar um container invisível no canto superior esquerdo
+col_btn, col_space = st.columns([1, 20])
+with col_btn:
+    if st.button("◀", key="toggle_sidebar", help="Abrir menu lateral"):
+        st.session_state.sidebar_open = True
+        st.rerun()
+
+# Aplicar CSS para posicionar o botão fixo
 st.markdown("""
-    <script>
-        // Função para abrir a sidebar
-        function toggleSidebar() {
-            // Tentar encontrar o botão de colapso da sidebar
-            const collapsedControl = window.parent.document.querySelector('[data-testid="collapsedControl"]');
-            
-            if (collapsedControl) {
-                // Simular clique no botão
-                collapsedControl.click();
-            } else {
-                // Alternativa: tentar encontrar o botão do header
-                const headerButton = window.parent.document.querySelector('button[kind="header"]');
-                if (headerButton) {
-                    headerButton.click();
-                }
-            }
+    <style>
+        /* Estilizar o botão de toggle */
+        div[data-testid="column"]:first-child button {
+            position: fixed !important;
+            top: 20px !important;
+            left: 20px !important;
+            z-index: 999999 !important;
+            background: linear-gradient(135deg, #667eea, #764ba2) !important;
+            border: none !important;
+            border-radius: 10px !important;
+            width: 50px !important;
+            height: 50px !important;
+            font-size: 24px !important;
+            color: white !important;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+            transition: all 0.3s ease !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         
-        // Verificar se a sidebar está visível
-        function isSidebarOpen() {
-            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-            if (!sidebar) return false;
-            
-            // Verificar se a sidebar tem a classe ou atributo que indica que está aberta
-            const isCollapsed = sidebar.getAttribute('aria-expanded') === 'false';
-            return !isCollapsed;
+        div[data-testid="column"]:first-child button:hover {
+            transform: scale(1.1) !important;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
         }
         
-        // Atualizar visibilidade do botão
-        setInterval(function() {
-            const customBtn = document.querySelector('.sidebar-toggle-btn');
-            if (customBtn) {
-                customBtn.style.display = isSidebarOpen() ? 'none' : 'flex';
-            }
-        }, 100);
-    </script>
-    
-    <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">
-            <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/>
-        </svg>
-    </button>
+        div[data-testid="column"]:first-child button p {
+            margin: 0 !important;
+            padding: 0 !important;
+            font-size: 24px !important;
+        }
+    </style>
 """, unsafe_allow_html=True)
 
 # ========== SIDEBAR ==========
@@ -961,7 +962,7 @@ else:
             <div style="background: var(--card-bg); padding: 20px; border-radius: 10px; max-width: 600px; margin: 0 auto;">
                 <h3 style="color: var(--text-color); margin-top: 0;">🚀 Como usar:</h3>
                 <ol style="text-align: left; color: var(--text-color); line-height: 1.8;">
-                    <li>Clique no botão roxo no canto superior esquerdo para abrir o menu</li>
+                    <li>Clique no botão roxo ◀ no canto superior esquerdo para abrir o menu</li>
                     <li>Faça upload de uma ou mais planilhas (Excel/CSV)</li>
                     <li>Os dados serão carregados automaticamente</li>
                     <li>Digite sua pergunta no chat acima</li>
