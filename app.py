@@ -52,43 +52,43 @@ def carregar_google_sheets():
     """Carrega dados das planilhas do Google Sheets"""
     if not GOOGLE_SHEETS_ENABLED:
         return {}
-   
+    
     try:
         # Parsear credenciais JSON
         creds_dict = json.loads(GOOGLE_SHEETS_CREDENTIALS)
-       
+        
         # Criar credenciais
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-       
+        
         # Conectar ao Google Sheets
         client = gspread.authorize(credentials)
-       
+        
         dataframes = {}
-       
+        
         # Carregar cada planilha configurada
         for nome, sheet_id in SHEET_IDS.items():
             if sheet_id: # Só carregar se o ID foi configurado
                 try:
                     spreadsheet = client.open_by_key(sheet_id)
-                   
+                    
                     # Pegar todas as abas da planilha
                     for worksheet in spreadsheet.worksheets():
                         # Converter para DataFrame
                         data = worksheet.get_all_values()
                         if len(data) > 1: # Tem header e dados
                             df = pd.DataFrame(data[1:], columns=data[0])
-                           
+                            
                             # Tentar converter colunas numéricas
                             for col in df.columns:
                                 try:
                                     df[col] = pd.to_numeric(df[col])
                                 except:
                                     pass
-                           
+                            
                             # Nome da aba
                             aba_nome = worksheet.title
                             key = f"{nome} - {aba_nome}" if aba_nome != "Sheet1" else nome
@@ -96,13 +96,13 @@ def carregar_google_sheets():
                 except Exception as e:
                     st.warning(f"⚠️ Erro ao carregar {nome}: {str(e)}")
                     continue
-       
+        
         return dataframes
-   
+    
     except json.JSONDecodeError:
         st.error("❌ Erro: Credenciais do Google Sheets inválidas!")
         return {}
-   
+    
     except Exception as e:
         st.error(f"❌ Erro ao conectar Google Sheets: {str(e)}")
         return {}
@@ -208,12 +208,12 @@ st.markdown(
     [data-testid="stSidebar"][aria-expanded="true"] ~ div .sidebar-toggle-btn {
         display: none !important;
     }
-   
+    
     /* Mostrar botão customizado quando sidebar está fechada */
     [data-testid="stSidebar"][aria-expanded="false"] ~ div .sidebar-toggle-btn {
         display: flex !important;
     }
-    /* Botão de abrir/fechar sidebar - EXTERNO */
+    /* Botão de abrir/fechar sidebar - EXTERNO (Aqui é onde a mágica acontece!) */
     button[kind="header"] {
         color: white !important;
     }
@@ -223,17 +223,24 @@ st.markdown(
     }
     /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
     [data-testid="collapsedControl"] {
-        background: linear-gradient(135deg, #ff6f61, #ffcc00) !important;
+        /* Fundo roxo do app */
+        background: linear-gradient(135deg, #667eea, #764ba2) !important; 
         border: none !important;
         border-radius: 10px !important;
-        width: 50px !important;
-        height: 50px !important;
-        box-shadow: 0 4px 12px rgba(255, 111, 97, 0.6) !important;
+        /* Tamanho 50x50 conforme solicitado */
+        width: 50px !important; 
+        height: 50px !important; 
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.6) !important;
         transition: all 0.3s ease !important;
+        /* Alinha no canto superior esquerdo (Streamlit já faz isso, mas garantimos) */
+        position: fixed;
+        top: 15px; /* Ajuste se necessário para o seu layout */
+        left: 15px; /* Ajuste se necessário para o seu layout */
+        z-index: 10;
     }
     [data-testid="collapsedControl"]:hover {
         transform: scale(1.1) !important;
-        box-shadow: 0 6px 20px rgba(255, 111, 97, 0.8) !important;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.8) !important;
     }
     [data-testid="collapsedControl"] > div {
         display: flex !important;
@@ -241,9 +248,17 @@ st.markdown(
         justify-content: center !important;
     }
     [data-testid="collapsedControl"] svg {
-        fill: white !important;
-        width: 24px !important;
+        /* O SVG padrão é o do hamburguer. Vamos substituí-lo por uma seta para a esquerda. */
+        display: none !important; /* Esconde o SVG padrão */
+    }
+    [data-testid="collapsedControl"]:before {
+        /* Adiciona um SVG de seta para a esquerda (Arrow Left) */
+        content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63678L15.7782 7.05099L10.8284 12.0007Z'%3E%3C/path%3E%3C/svg%3E");
+        /* Ajusta o tamanho do ícone */
+        width: 24px !important; 
         height: 24px !important;
+        display: block !important;
+        line-height: 1; /* Para centralizar melhor */
     }
     /* Botão do menu superior (fora da sidebar) */
     header[data-testid="stHeader"] button {
@@ -514,18 +529,18 @@ def read_uploaded_file_to_df(uploaded_file):
     """Lê arquivo Excel ou CSV e retorna DataFrame"""
     if uploaded_file is None:
         raise ValueError("Nenhum arquivo fornecido")
-   
+    
     try:
         uploaded_file.seek(0)
         content = uploaded_file.getvalue()
         bio = BytesIO(content)
         name = uploaded_file.name.lower()
-       
+        
         if name.endswith(".csv"):
             df = pd.read_csv(bio)
             bio.close()
             return df
-       
+        
         try:
             df = pd.read_excel(bio, engine="openpyxl")
             bio.close()
@@ -561,10 +576,10 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
     """Constrói prompt com dados das planilhas"""
     if not dataframes:
         return f"Nenhuma planilha foi carregada ainda.\n\nPergunta: {question}"
-   
+    
     all_data = ""
     total_rows = 0
-   
+    
     for filename, df in dataframes.items():
         if isinstance(df, dict):
             for sheet_name, sheet_df in df.items():
@@ -575,7 +590,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
             preview = df.head(10).to_string(index=False)
             all_data += f"\n--- Planilha: {filename} ({len(df)} linhas) ---\n{preview}\n"
             total_rows += len(df)
-   
+    
     prompt = f"""Você é um analista de dados especializado.
 DADOS CARREGADOS ({total_rows} linhas no total): {all_data}
 PERGUNTA DO USUÁRIO: {question}
@@ -588,18 +603,18 @@ INSTRUÇÕES:
 6. Formate todos os valores monetários em Reais, usando o formato R$ X.XXX,XX (ex: R$ 42.173,01). O símbolo R$ deve ser colado ao valor.
 7. Ao responder, NUNCA use negrito, itálico ou formatação de fonte que possa alterar o tipo de fonte do texto. Use APENAS a formatação de código inline do Markdown (texto entre crases, ex: `Monitor 4K`) para destacar nomes de itens, IDs de produtos e valores monetários.
 Responda agora:"""
-   
+    
     return prompt
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
     """Chamada síncrona ao modelo"""
     if model is None:
         raise RuntimeError("Modelo não configurado.")
-   
+    
     try:
         resp = model.generate_content(prompt, max_output_tokens=max_output_tokens)
     except TypeError:
         resp = model.generate_content(prompt)
-   
+    
     return getattr(resp, "text", str(resp))
 def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
     """Chama modelo com timeout e retry"""
@@ -621,7 +636,7 @@ st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', un
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.markdown("### 📂 Gerenciar Dados")
-   
+    
     # Status do Google Sheets
     if GOOGLE_SHEETS_ENABLED:
         st.success("✅ Google Sheets conectado!")
@@ -631,10 +646,10 @@ with st.sidebar:
             st.rerun()
     else:
         st.info("ℹ️ Google Sheets não configurado. Use upload manual.")
-   
+    
     st.markdown("---")
     st.markdown("### ➕ Upload Manual (Opcional)")
-   
+    
     file_uploader_key = f"file_uploader_{len(st.session_state.uploaded_file_keys)}"
     uploaded_files = st.file_uploader(
         "Adicionar planilhas extras",
@@ -642,13 +657,13 @@ with st.sidebar:
         accept_multiple_files=True,
         key=file_uploader_key
     )
-   
+    
     if uploaded_files:
         new_files = []
         for file in uploaded_files:
             if file.name not in st.session_state.dataframes:
                 new_files.append(file)
-       
+        
         if new_files:
             with st.spinner(f"📊 Carregando {len(new_files)} arquivo(s)..."):
                 for file in new_files:
@@ -662,7 +677,7 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"❌ {file.name}: {str(e)}")
             st.rerun()
-   
+    
     # Mostrar dados carregados
     if st.session_state.dataframes:
         st.markdown("---")
@@ -677,14 +692,14 @@ with st.sidebar:
                 badge = "📄" # Upload manual
             st.markdown(f"{badge} **{filename}**<br><small>{rows} linhas</small>", unsafe_allow_html=True)
             total_rows += rows
-       
+        
         st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
-   
+    
     # Verificar se existem planilhas manuais usando a nova função
     has_manual_sheets = any(
         not is_google_sheets_data(filename) for filename in st.session_state.dataframes.keys()
     )
-   
+    
     if has_manual_sheets:
         if st.button("🗑️ Limpar Planilhas Manuais", use_container_width=True):
             # Manter apenas planilhas do Google Sheets usando a nova função
@@ -698,7 +713,7 @@ with st.sidebar:
 # ========== ÁREA PRINCIPAL - CHAT ==========
 if st.session_state.dataframes:
     st.markdown('<div class="panel">', unsafe_allow_html=True)
-   
+    
     # Histórico (exibido UMA ÚNICA VEZ)
     for chat in st.session_state.chat_history:
         st.markdown(
@@ -710,7 +725,7 @@ if st.session_state.dataframes:
             unsafe_allow_html=True
         )
         st.markdown("---")
-   
+    
     # Input
     with st.form(key="chat_form", clear_on_submit=True):
         user_question = st.text_input(
@@ -722,12 +737,12 @@ if st.session_state.dataframes:
         col1, col2 = st.columns([4, 1])
         with col2:
             submit = st.form_submit_button("📤 Enviar", use_container_width=True)
-   
+    
     if submit and user_question and not st.session_state.processing:
         st.session_state.processing = True
         # Adicionar a pergunta ao histórico ANTES de processar
         st.session_state.chat_history.append({"question": user_question, "answer": "🤖 Analisando..."})
-       
+        
         prompt = build_prompt_with_data(user_question, st.session_state.dataframes)
         try:
             answer = call_model_with_timeout(prompt)
@@ -735,18 +750,18 @@ if st.session_state.dataframes:
             answer = "⏱️ Tempo limite atingido. Tente uma pergunta mais simples."
         except Exception as e:
             answer = f"❌ Erro: {str(e)}"
-       
+        
         # Atualizar a última resposta no histórico
         st.session_state.chat_history[-1]["answer"] = answer
         st.session_state.processing = False
         st.rerun()
-   
+    
     if st.button("🧹 Limpar Conversa"):
         st.session_state.chat_history = []
         st.rerun()
-   
+    
     st.markdown('</div>', unsafe_allow_html=True)
-   
+    
     # Stats
     st.markdown("---")
     total_files = len(st.session_state.dataframes)
@@ -761,7 +776,7 @@ if st.session_state.dataframes:
 else:
     # Tela inicial (sem dados)
     st.markdown('<div class="panel">', unsafe_allow_html=True)
-   
+    
     if st.session_state.chat_history:
         for chat in st.session_state.chat_history:
             st.markdown(
@@ -773,7 +788,7 @@ else:
                 unsafe_allow_html=True
             )
             st.markdown("---")
-   
+    
     with st.form(key="nodata_form", clear_on_submit=True):
         user_question = st.text_input(
             "💭 Faça sua pergunta:",
@@ -784,12 +799,12 @@ else:
         col_btn1, col_btn2 = st.columns([4, 1])
         with col_btn2:
             submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
-   
+    
     if submit_btn and user_question and not st.session_state.processing:
         st.session_state.processing = True
         # Adicionar a pergunta ao histórico ANTES de processar
         st.session_state.chat_history.append({"question": user_question, "answer": "🤖 Analisando..."})
-       
+        
         prompt = build_prompt_with_data(user_question, None)
         try:
             answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
@@ -797,45 +812,45 @@ else:
             answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente novamente."
         except Exception as e:
             answer = f"❌ Erro: {str(e)}"
-       
+        
         # Atualizar a última resposta no histórico
         st.session_state.chat_history[-1]["answer"] = answer
         st.session_state.processing = False
         st.rerun()
-   
+    
     if st.session_state.chat_history:
         if st.button("🧹 Limpar Conversa"):
             st.session_state.chat_history = []
             st.rerun()
-   
+    
     st.markdown('</div>', unsafe_allow_html=True)
-   
+    
     st.markdown("---")
-   
+    
     # Mensagem de boas-vindas
     st.markdown(
         """
         <div class="panel" style="text-align:center; padding: 60px 20px;">
-            <img src='https://img.icons8.com/fluency/150/data-configuration.png' width='150' style="margin-bottom:20px;"/>
-            <h2 style="margin:10px 0; color: var(--text-color);">Bem-vindo ao InsightTab! 👋</h2>
-            <p style="color:var(--muted-color); font-size: 1.1em; margin-bottom: 30px;">
-                Carregue suas planilhas na barra lateral e comece a fazer perguntas inteligentes
-            </p>
-            <div style="background: var(--card-bg); padding: 20px; border-radius: 10px; max-width: 600px; margin: 0 auto;">
-                <h3 style="color: var(--text-color); margin-top: 0;">🚀 Como usar:</h3>
-                <ol style="text-align: left; color: var(--text-color">
+        <img src='https://img.icons8.com/fluency/150/data-configuration.png' width='150' style="margin-bottom:20px;"/>
+        <h2 style="margin:10px 0; color: var(--text-color);">Bem-vindo ao InsightTab! 👋</h2>
+        <p style="color:var(--muted-color); font-size: 1.1em; margin-bottom: 30px;">
+        Carregue suas planilhas na barra lateral e comece a fazer perguntas inteligentes
+        </p>
+        <div style="background: var(--card-bg); padding: 20px; border-radius: 10px; max-width: 600px; margin: 0 auto;">
+        <h3 style="color: var(--text-color); margin-top: 0;">🚀 Como usar:</h3>
+        <ol style="text-align: left; color: var(--text-color">
         """,
         unsafe_allow_html=True
     )
     # A última tag não está fechada, continuando a lista em Python...
     st.markdown(
         """
-                <li>Clique no botão <span style='font-size: 1.2em; font-weight: bold;'>&lt;</span> no canto superior esquerdo para abrir a barra lateral.</li>
-                <li>Conecte-se ao Google Sheets ou faça upload de arquivos Excel/CSV.</li>
-                <li>Digite sua pergunta na caixa de chat (ex: 'Qual a receita total em Janeiro?').</li>
-                <li>O InsightTab analisa seus dados e fornece a resposta.</li>
-                </ol>
-            </div>
+        <li>Clique no botão <span style='font-size: 1.2em; font-weight: bold;'>&lt;</span> no canto superior esquerdo para abrir a barra lateral.</li>
+        <li>Conecte-se ao Google Sheets ou faça upload de arquivos Excel/CSV.</li>
+        <li>Digite sua pergunta na caixa de chat (ex: 'Qual a receita total em Janeiro?').</li>
+        <li>O InsightTab analisa seus dados e fornece a resposta.</li>
+        </ol>
+        </div>
         </div>
         """,
         unsafe_allow_html=True
