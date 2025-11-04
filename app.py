@@ -129,7 +129,7 @@ st.set_page_config(
     page_title="InsightTab - Analista Inteligente",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed" # MANTIDO 'collapsed' PARA O BOTÃO SER ÚTIL
+    initial_sidebar_state="collapsed"
 )
 
 # ========== ESTADO INICIAL ==========
@@ -234,12 +234,12 @@ st.markdown(
         height: 24px;
     }
 
-    /* Esconder botão quando sidebar está aberta */
+    /* Esconder botão customizado quando sidebar está aberta */
     [data-testid="stSidebar"][aria-expanded="true"] ~ div .sidebar-toggle-btn {
         display: none !important;
     }
     
-    /* Mostrar botão quando sidebar está fechada */
+    /* Mostrar botão customizado quando sidebar está fechada */
     [data-testid="stSidebar"][aria-expanded="false"] ~ div .sidebar-toggle-btn {
         display: flex !important;
     }
@@ -256,7 +256,8 @@ st.markdown(
 
     /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
     [data-testid="collapsedControl"] {
-        display: none !important; /* MANTIDO HIDDEN para usar o botão customizado */
+        /* MANTIDO HIDDEN para garantir que o botão customizado seja usado */
+        display: none !important; 
     }
 
     /* Botão do menu superior (fora da sidebar) */
@@ -688,22 +689,16 @@ st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', un
 # ========== BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR ==========
 st.markdown("""
 <script>
-// Função para abrir a sidebar
 function toggleSidebar() {
-    // Tentar encontrar o botão de colapso da sidebar (o hamburguer externo)
-    // Streamlit usa um MutationObserver para lidar com isso, mas podemos tentar
-    // encontrar os botões de toggle internos que Streamlit usa no header.
-    const collapsedControl = window.parent.document.querySelector('[data-testid="collapsedControl"]');
-    if (collapsedControl) {
-        // Simular clique no botão de colapso
-        collapsedControl.click();
+    // 1. Procurar pelo botão que aparece no canto superior esquerdo do header, que o Streamlit usa para abrir a sidebar.
+    // Este botão é o único que permanece visível quando a sidebar está colapsada.
+    const headerButton = window.parent.document.querySelector('[data-testid="stHeader"] button');
+
+    if (headerButton) {
+        // Simular o clique no botão do Streamlit
+        headerButton.click();
     } else {
-        // Alternativa: tentar encontrar o botão de toggle no header (geralmente é o hamburguer/seta)
-        // Isso é menos confiável em diferentes versões do Streamlit.
-        const headerButton = window.parent.document.querySelector('button[kind="header"]');
-        if (headerButton) {
-            headerButton.click();
-        }
+        console.error("Não foi possível encontrar o botão de toggle do Streamlit.");
     }
 }
 </script>
