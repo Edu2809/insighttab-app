@@ -191,45 +191,45 @@ st.markdown(
        
         /* Botão de abrir/fechar sidebar - EXTERNO */
         button[kind="header"] {
-            color: white !important;
+            color: #ffffff !important;
         }
        
         button[kind="header"] svg {
-            fill: white !important;
-            stroke: white !important;
+            fill: #ffffff !important;
+            stroke: #ffffff !important;
         }
        
         /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
         [data-testid="collapsedControl"] {
-            color: white !important;
+            color: #ffffff !important;
         }
        
         [data-testid="collapsedControl"] svg {
-            fill: white !important;
-            stroke: white !important;
+            fill: #ffffff !important;
+            stroke: #ffffff !important;
         }
        
         /* Botão do menu superior (fora da sidebar) */
         header[data-testid="stHeader"] button {
-            color: white !important;
+            color: #ffffff !important;
         }
        
         header[data-testid="stHeader"] button svg {
-            fill: white !important;
-            stroke: white !important;
+            fill: #ffffff !important;
+            stroke: #ffffff !important;
         }
        
         /* Forçar todos os botões do header */
         [data-testid="stHeader"] button[kind="header"],
         [data-testid="stHeader"] button {
-            color: white !important;
+            color: #ffffff !important;
         }
        
         [data-testid="stHeader"] button[kind="header"] svg,
         [data-testid="stHeader"] button svg {
-            fill: white !important;
-            stroke: white !important;
-            color: white !important;
+            fill: #ffffff !important;
+            stroke: #ffffff !important;
+            color: #ffffff !important;
         }
        
         /* Header principal com ícone de estrela */
@@ -252,7 +252,7 @@ st.markdown(
             border-radius: 8px;
             margin-right: 10px;
             font-size: 1.8rem;
-            color: white; /* Adicionado para tornar o ícone branco */
+            color: white; /* Garantir que o ícone seja branco */
         }
        
         /* Stats boxes */
