@@ -531,6 +531,7 @@ st.markdown(
         ::-webkit-scrollbar-thumb:hover {
             background: var(--accent);
         }
+        
     </style>
     """,
     unsafe_allow_html=True,
@@ -888,5 +889,15 @@ else:
                     <li>A IA analisa e responde baseado nos seus dados</li>
                 </ol>
             </div>
+            <style>
+            /* Ícone lateral (menu hamburguer / seta de abrir sidebar) - branco */
+            [data-testid="collapsedControl"],
+            [data-testid="collapsedControl"] svg {
+            color: white !important;
+            fill: white !important;
+            stroke: white !important;
+            opacity: 1 !important;
+        }
+    </style>
     """
     , unsafe_allow_html=True)
