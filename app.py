@@ -201,6 +201,26 @@ st.markdown(
             color: var(--text-color) !important;
         }
         
+        /* Botão de abrir/fechar sidebar */
+        button[kind="header"] {
+            color: white !important;
+        }
+        
+        button[kind="header"] svg {
+            fill: white !important;
+            stroke: white !important;
+        }
+        
+        /* Ícone do botão hamburguer */
+        [data-testid="collapsedControl"] {
+            color: white !important;
+        }
+        
+        [data-testid="collapsedControl"] svg {
+            fill: white !important;
+            stroke: white !important;
+        }
+        
         /* Header principal com ícone de estrela */
         .main-header {
             font-size: 2.8rem;
@@ -284,6 +304,7 @@ st.markdown(
             color: var(--text-color) !important;
             border: 1px solid rgba(102, 126, 234, 0.3) !important;
             border-radius: 8px;
+            caret-color: white !important;
         }
         
         .stTextInput>label,
