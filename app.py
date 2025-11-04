@@ -223,17 +223,17 @@ st.markdown(
     }
     /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
     [data-testid="collapsedControl"] {
-        background: linear-gradient(135deg, #667eea, #764ba2) !important;
+        background: linear-gradient(135deg, #ff6f61, #ffcc00) !important;
         border: none !important;
         border-radius: 10px !important;
         width: 50px !important;
         height: 50px !important;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+        box-shadow: 0 4px 12px rgba(255, 111, 97, 0.6) !important;
         transition: all 0.3s ease !important;
     }
     [data-testid="collapsedControl"]:hover {
         transform: scale(1.1) !important;
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
+        box-shadow: 0 6px 20px rgba(255, 111, 97, 0.8) !important;
     }
     [data-testid="collapsedControl"] > div {
         display: flex !important;
@@ -241,7 +241,7 @@ st.markdown(
         justify-content: center !important;
     }
     [data-testid="collapsedControl"] svg {
-        fill: white !important;
+        fill: #0b1116 !important;
         width: 24px !important;
         height: 24px !important;
     }
