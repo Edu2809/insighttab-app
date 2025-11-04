@@ -603,33 +603,33 @@ st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', un
 st.markdown("""
 <script>
 function toggleSidebar() {
-    const toggleButton = window.parent.document.querySelector('[data-testid="collapsedControl"]');
-    if (toggleButton) {
-        toggleButton.click();
-    } else {
-        console.error("Não foi possível encontrar o botão de toggle do Streamlit.");
+    const doc = window.parent.document;
+    const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+    const toggle = doc.querySelector('[data-testid="collapsedControl"]');
+
+    // Se a sidebar está colapsada, tenta abrir
+    if (sidebar && sidebar.getAttribute("aria-expanded") === "false") {
+        if (toggle) {
+            toggle.style.pointerEvents = "auto";
+            toggle.style.opacity = "1";
+            toggle.click();
+        } else {
+            console.warn("Botão nativo de toggle não encontrado.");
+        }
+    } else if (sidebar && sidebar.getAttribute("aria-expanded") === "true") {
+        // Se quiser fechar quando clicar de novo
+        if (toggle) toggle.click();
     }
 }
 </script>
+
 <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" onclick="toggleSidebar()">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
         <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="white"/>
     </svg>
 </button>
-<script>
-const nativeButton = window.parent.document.querySelector('[data-testid="collapsedControl"]');
-const customButton = window.parent.document.querySelector('#sidebar-toggle-btn');
-if (nativeButton && customButton) {
-    const rect = nativeButton.getBoundingClientRect();
-    customButton.style.position = 'fixed';
-    customButton.style.top = `${rect.top}px`;
-    customButton.style.left = `${rect.left}px`;
-    customButton.style.width = `${rect.width}px`;
-    customButton.style.height = `${rect.height}px`;
-    customButton.style.borderRadius = window.parent.getComputedStyle(nativeButton).borderRadius;
-}
-</script>
 """, unsafe_allow_html=True)
+
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.markdown("### 📂 Gerenciar Dados")
