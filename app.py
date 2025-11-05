@@ -110,7 +110,7 @@ def carregar_google_sheets():
 MODEL_TIMEOUT = 60
 MODEL_RETRIES = 2
 RETRY_BACKOFF = 2.0
-SAMPLE_SIZE = 500
+SAMPLE_SIZE = 1000  # Aumentado de 500 para 1000 linhas
 MAX_OUTPUT_TOKENS = 1024
 st.set_page_config(
     page_title="InsightTab - Analista Inteligente",
@@ -632,6 +632,7 @@ def read_uploaded_file_to_df(uploaded_file):
                 return df
     except Exception as e:
         raise Exception(f"Erro ao ler arquivo: {str(e)}")
+
 def is_google_sheets_data(filename):
     """Verifica se uma planilha veio do Google Sheets"""
     # Verifica se o nome começa com algum dos nomes das planilhas do Google Sheets
@@ -639,6 +640,7 @@ def is_google_sheets_data(filename):
         if filename.startswith(sheet_name):
             return True
     return False
+
 def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
     """Constrói prompt com dados das planilhas"""
     if not dataframes:
@@ -650,11 +652,21 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
     for filename, df in dataframes.items():
         if isinstance(df, dict):
             for sheet_name, sheet_df in df.items():
-                preview = sheet_df.head(10).to_string(index=False)
+                # Usar todas as linhas (limitado por sample_size se necessário)
+                if len(sheet_df) <= sample_size:
+                    preview = sheet_df.to_string(index=False)
+                else:
+                    preview = sheet_df.head(sample_size).to_string(index=False)
+                    preview += f"\n... (mostrando {sample_size} de {len(sheet_df)} linhas)"
                 all_data += f"\n--- Planilha: {sheet_name} ({len(sheet_df)} linhas) ---\n{preview}\n"
                 total_rows += len(sheet_df)
         else:
-            preview = df.head(10).to_string(index=False)
+            # Usar todas as linhas (limitado por sample_size se necessário)
+            if len(df) <= sample_size:
+                preview = df.to_string(index=False)
+            else:
+                preview = df.head(sample_size).to_string(index=False)
+                preview += f"\n... (mostrando {sample_size} de {len(df)} linhas)"
             all_data += f"\n--- Planilha: {filename} ({len(df)} linhas) ---\n{preview}\n"
             total_rows += len(df)
    
@@ -662,16 +674,18 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
 DADOS CARREGADOS ({total_rows} linhas no total): {all_data}
 PERGUNTA DO USUÁRIO: {question}
 INSTRUÇÕES:
-1. Analise APENAS os dados fornecidos acima
+1. Analise TODOS os dados fornecidos acima - você tem acesso a todas as {total_rows} linhas
 2. Responda em português brasileiro de forma clara e profissional
 3. Use estatísticas e números EXATOS dos dados
 4. Se a pergunta for sobre dados não presentes, informe isso
 5. Seja objetivo e direto na resposta
 6. Formate todos os valores monetários em Reais, usando o formato R$ X.XXX,XX (ex: R$ 42.173,01). O símbolo R$ deve ser colado ao valor.
 7. Ao responder, NUNCA use negrito, itálico ou formatação de fonte que possa alterar o tipo de fonte do texto. Use APENAS a formatação de código inline do Markdown (texto entre crases, ex: `Monitor 4K`) para destacar nomes de itens, IDs de produtos e valores monetários.
+8. Você pode fazer cálculos, agregações e análises em TODAS as linhas disponíveis, não apenas nas primeiras
 Responda agora:"""
    
     return prompt
+
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
     """Chamada síncrona ao modelo"""
     if model is None:
@@ -683,6 +697,7 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
         resp = model.generate_content(prompt)
    
     return getattr(resp, "text", str(resp))
+
 def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
     """Chama modelo com timeout e retry"""
     last_exc = None
@@ -698,8 +713,10 @@ def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
                 last_exc = e
         time.sleep(RETRY_BACKOFF ** (attempt - 1))
     raise last_exc
+
 # ========== HEADER ==========
 st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', unsafe_allow_html=True)
+
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.markdown("### 📂 Gerenciar Dados")
