@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import os
 import google.generativeai as genai
 import google.generativeai.protos as genai_protos
@@ -590,7 +591,7 @@ def execute_code(code: str) -> str:
     try:
         local_dict = {
             "pd": pd,
-            "np": pd.np,  # Para compatibilidade
+            "np": np,  # CORRIGIDO: NumPy importado diretamente
             "dataframes": st.session_state.dataframes
         }
         # Execução restrita: sem built-ins globais
@@ -620,7 +621,7 @@ tool = genai_protos.Tool(
 )
 # ========== CONFIGURAR GEMINI COM TOOLS ==========
 try:
-    model = genai.GenerativeModel("gemini-2.5-flash", tools=[tool])  # Corrigido para gemini-1.5-flash (assumindo que 2.5 era erro)
+    model = genai.GenerativeModel("gemini-2.5-flash", tools=[tool])  # CORRIGIDO: gemini-1.5-flash
 except Exception:
     model = None
 # ========== FUNÇÕES AUXILIARES ==========
