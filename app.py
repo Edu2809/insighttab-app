@@ -600,9 +600,9 @@ def execute_code(code: str) -> str:
     except Exception as e:
         return f"Erro na execução do código: {str(e)}"
 
-tool = genai.Tool(
+tool = genai_protos.Tool(
     function_declarations=[
-        genai.FunctionDeclaration(
+        genai_protos.FunctionDeclaration(
             name="execute_code",
             description="Execute código Python para analisar os dataframes. Use 'dataframes' dict com chaves como nomes das planilhas. Defina 'result' com o resultado final.",
             parameters={
@@ -999,13 +999,3 @@ else:
         """,
         unsafe_allow_html=True
     )
-
-# Explicação do problema e solução:
-# O bot alucina porque o prompt envia apenas as primeiras 1000 linhas das planilhas, mas instrui o modelo a analisar "TODOS os dados", levando a invenções quando dados estão além do sample.
-# Solução implementada: Em vez de enviar dados no prompt (o que limita por tokens), use function calling do Gemini para gerar e executar código Python no app, acessando os dataframes completos via 'execute_code'. 
-# Mudanças principais: 
-# - Definição da tool 'execute_code' (depois do ícone SVG).
-# - Modelo inicializado com tools.
-# - Modificação em build_prompt_with_data para listar nomes das planilhas e instruir uso da tool.
-# - Atualização em _call_model_sync para lidar com loop de tool calling.
-# Agora, o modelo gera código que roda no full dataset, evitando alucinações e dados errados para linhas específicas.
