@@ -605,16 +605,16 @@ tool = genai_protos.Tool(
         genai_protos.FunctionDeclaration(
             name="execute_code",
             description="Execute código Python para analisar os dataframes. Use 'dataframes' dict com chaves como nomes das planilhas. Defina 'result' com o resultado final.",
-            parameters={
-                "type": genai_protos.SchemaType.OBJECT,
-                "properties": {
-                    "code": {
-                        "type": genai_protos.SchemaType.STRING,
-                        "description": "O código Python a executar."
-                    }
+            parameters=genai_protos.Schema(
+                type=genai_protos.Type.OBJECT,
+                properties={
+                    "code": genai_protos.Schema(
+                        type=genai_protos.Type.STRING,
+                        description="O código Python a executar."
+                    )
                 },
-                "required": ["code"]
-            }
+                required=["code"]
+            )
         )
     ]
 )
