@@ -620,7 +620,7 @@ tool = genai_protos.Tool(
 )
 # ========== CONFIGURAR GEMINI COM TOOLS ==========
 try:
-    model = genai.GenerativeModel("gemini-1.5-flash", tools=[tool])  # Corrigido para gemini-1.5-flash (assumindo que 2.5 era erro)
+    model = genai.GenerativeModel("gemini-2.5-flash", tools=[tool])  # Corrigido para gemini-1.5-flash (assumindo que 2.5 era erro)
 except Exception:
     model = None
 # ========== FUNÇÕES AUXILIARES ==========
