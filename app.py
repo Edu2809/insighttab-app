@@ -130,6 +130,8 @@ if "processing" not in st.session_state:
     st.session_state.processing = False
 if "uploaded_file_keys" not in st.session_state:
     st.session_state.uploaded_file_keys = []
+if "last_question" not in st.session_state:
+    st.session_state.last_question = None
 # ========== CSS MODO ESCURO FIXO ==========
 st.markdown(
     """
@@ -239,9 +241,6 @@ st.markdown(
     width: 24px !important;
     height: 24px !important;
 }
-
-}
-    }
     [data-testid="collapsedControl"]:hover {
         transform: scale(1.1) !important;
         box-shadow: 0 6px 20px rgba(255, 111, 97, 0.8) !important;
@@ -319,6 +318,7 @@ st.markdown(
         color: var(--text-color) !important;
         max-width: 100%;
         word-wrap: break-word;
+        position: relative;
     }
     .user-message {
         background: rgba(66,153,225,0.12);
@@ -331,6 +331,18 @@ st.markdown(
     .chat-message, .chat-message * {
         color: var(--text-color) !important;
     }
+    
+    /* ÍCONE DE TABELA NO BOT */
+    .bot-icon {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-right: 8px;
+        vertical-align: middle;
+        position: relative;
+        top: -2px;
+    }
+    
     /* Cor do elemento ID/Nome (código inline) */
     .chat-message code {
         color: var(--accent) !important;
@@ -340,6 +352,23 @@ st.markdown(
         font-family: inherit !important;
         font-size: 0.9em;
     }
+    
+    /* MENSAGEM DE PROCESSAMENTO */
+    .processing-message {
+        padding: 15px;
+        border-radius: 10px;
+        margin: 12px 0;
+        background: rgba(102, 126, 234, 0.1);
+        border-left: 4px solid rgba(102, 126, 234, 1);
+        color: var(--text-color) !important;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    
     /* Inputs e formulários */
     .stTextInput>div>div>input, .stTextArea>div>div>textarea {
         background-color: var(--card-bg) !important;
@@ -511,7 +540,7 @@ st.markdown(
     ::-webkit-scrollbar-thumb:hover {
         background: var(--accent);
     }
-/* Forçar ícones ou textos com a classe .texto-branco a ficarem brancos */
+    /* Forçar ícones ou textos com a classe .texto-branco a ficarem brancos */
     .texto-branco, 
     .texto-branco svg, 
     .texto-branco path {
@@ -519,7 +548,6 @@ st.markdown(
         fill: white !important;
         stroke: white !important;
     }
-
     /* Forçar cor branca em todos os ícones padrão do Streamlit keyboard_double_arrow_right */
     span[data-testid="stIconMaterial"] {
         color: white !important;
@@ -530,6 +558,18 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# Ícone SVG de tabela (preto)
+TABLE_ICON_SVG = """
+<svg class="bot-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="3" width="18" height="18" rx="2" stroke="black" stroke-width="2" fill="none"/>
+    <line x1="3" y1="9" x2="21" y2="9" stroke="black" stroke-width="2"/>
+    <line x1="3" y1="15" x2="21" y2="15" stroke="black" stroke-width="2"/>
+    <line x1="9" y1="3" x2="9" y2="21" stroke="black" stroke-width="2"/>
+    <line x1="15" y1="3" x2="15" y2="21" stroke="black" stroke-width="2"/>
+</svg>
+"""
+
 # ========== CONFIGURAR GEMINI ==========
 try:
     model = genai.GenerativeModel("gemini-2.5-flash")
@@ -721,21 +761,37 @@ with st.sidebar:
             st.session_state.uploaded_file_keys.append(time.time())
             st.success("✅ Planilhas manuais removidas!")
             st.rerun()
-# ========== ÁREA PRINCIPAL - CHAT ==========
-if st.session_state.dataframes:
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
-   
-    # Histórico (exibido UMA ÚNICA VEZ)
-    for chat in st.session_state.chat_history:
+
+# ========== FUNÇÃO PARA EXIBIR CHAT ==========
+def render_chat_history():
+    """Renderiza o histórico do chat sem duplicação"""
+    for i, chat in enumerate(st.session_state.chat_history):
+        # Mensagem do usuário
         st.markdown(
             f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
             unsafe_allow_html=True
         )
+        
+        # Mensagem do bot
         st.markdown(
-            f'<div class="chat-message bot-message"><b>🤖 InsightTab:</b><br>{chat["answer"]}</div>',
+            f'<div class="chat-message bot-message"><b>{TABLE_ICON_SVG} InsightTab:</b><br>{chat["answer"]}</div>',
             unsafe_allow_html=True
         )
         st.markdown("---")
+
+# ========== ÁREA PRINCIPAL - CHAT ==========
+if st.session_state.dataframes:
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+   
+    # Renderizar histórico do chat (SEM DUPLICAÇÃO)
+    render_chat_history()
+    
+    # Mostrar mensagem de processamento se estiver processando
+    if st.session_state.processing:
+        st.markdown(
+            '<div class="processing-message"><b>🤖 Analisando sua pergunta...</b></div>',
+            unsafe_allow_html=True
+        )
    
     # Input
     with st.form(key="chat_form", clear_on_submit=True):
@@ -750,25 +806,41 @@ if st.session_state.dataframes:
             submit = st.form_submit_button("📤 Enviar", use_container_width=True)
    
     if submit and user_question and not st.session_state.processing:
-        st.session_state.processing = True
-        # Adicionar a pergunta ao histórico ANTES de processar
-        st.session_state.chat_history.append({"question": user_question, "answer": "🤖 Analisando..."})
-       
-        prompt = build_prompt_with_data(user_question, st.session_state.dataframes)
-        try:
-            answer = call_model_with_timeout(prompt)
-        except TimeoutError:
-            answer = "⏱️ Tempo limite atingido. Tente uma pergunta mais simples."
-        except Exception as e:
-            answer = f"❌ Erro: {str(e)}"
-       
-        # Atualizar a última resposta no histórico
-        st.session_state.chat_history[-1]["answer"] = answer
-        st.session_state.processing = False
-        st.rerun()
+        # Verificar se não é a mesma pergunta (evitar duplicação)
+        if user_question != st.session_state.last_question:
+            st.session_state.processing = True
+            st.session_state.last_question = user_question
+            
+            # Adicionar pergunta ao histórico
+            st.session_state.chat_history.append({
+                "question": user_question, 
+                "answer": ""
+            })
+            
+            # Recarregar para mostrar mensagem de processamento
+            st.rerun()
+   
+    # Processar pergunta se estiver em modo de processamento
+    if st.session_state.processing and st.session_state.chat_history:
+        last_chat = st.session_state.chat_history[-1]
+        if last_chat["answer"] == "":  # Ainda não processado
+            prompt = build_prompt_with_data(last_chat["question"], st.session_state.dataframes)
+            try:
+                answer = call_model_with_timeout(prompt)
+            except TimeoutError:
+                answer = "⏱️ Tempo limite atingido. Tente uma pergunta mais simples."
+            except Exception as e:
+                answer = f"❌ Erro: {str(e)}"
+           
+            # Atualizar resposta
+            st.session_state.chat_history[-1]["answer"] = answer
+            st.session_state.processing = False
+            st.rerun()
    
     if st.button("🧹 Limpar Conversa"):
         st.session_state.chat_history = []
+        st.session_state.last_question = None
+        st.session_state.processing = False
         st.rerun()
    
     st.markdown('</div>', unsafe_allow_html=True)
@@ -788,17 +860,15 @@ else:
     # Tela inicial (sem dados)
     st.markdown('<div class="panel">', unsafe_allow_html=True)
    
-    if st.session_state.chat_history:
-        for chat in st.session_state.chat_history:
-            st.markdown(
-                f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f'<div class="chat-message bot-message"><b>🤖 InsightTab:</b><br>{chat["answer"]}</div>',
-                unsafe_allow_html=True
-            )
-            st.markdown("---")
+    # Renderizar histórico do chat (SEM DUPLICAÇÃO)
+    render_chat_history()
+    
+    # Mostrar mensagem de processamento se estiver processando
+    if st.session_state.processing:
+        st.markdown(
+            '<div class="processing-message"><b>🤖 Analisando sua pergunta...</b></div>',
+            unsafe_allow_html=True
+        )
    
     with st.form(key="nodata_form", clear_on_submit=True):
         user_question = st.text_input(
@@ -812,26 +882,42 @@ else:
             submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
    
     if submit_btn and user_question and not st.session_state.processing:
-        st.session_state.processing = True
-        # Adicionar a pergunta ao histórico ANTES de processar
-        st.session_state.chat_history.append({"question": user_question, "answer": "🤖 Analisando..."})
-       
-        prompt = build_prompt_with_data(user_question, None)
-        try:
-            answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
-        except TimeoutError:
-            answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente novamente."
-        except Exception as e:
-            answer = f"❌ Erro: {str(e)}"
-       
-        # Atualizar a última resposta no histórico
-        st.session_state.chat_history[-1]["answer"] = answer
-        st.session_state.processing = False
-        st.rerun()
+        # Verificar se não é a mesma pergunta (evitar duplicação)
+        if user_question != st.session_state.last_question:
+            st.session_state.processing = True
+            st.session_state.last_question = user_question
+            
+            # Adicionar pergunta ao histórico
+            st.session_state.chat_history.append({
+                "question": user_question, 
+                "answer": ""
+            })
+            
+            # Recarregar para mostrar mensagem de processamento
+            st.rerun()
+   
+    # Processar pergunta se estiver em modo de processamento
+    if st.session_state.processing and st.session_state.chat_history:
+        last_chat = st.session_state.chat_history[-1]
+        if last_chat["answer"] == "":  # Ainda não processado
+            prompt = build_prompt_with_data(last_chat["question"], None)
+            try:
+                answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
+            except TimeoutError:
+                answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente novamente."
+            except Exception as e:
+                answer = f"❌ Erro: {str(e)}"
+           
+            # Atualizar resposta
+            st.session_state.chat_history[-1]["answer"] = answer
+            st.session_state.processing = False
+            st.rerun()
    
     if st.session_state.chat_history:
         if st.button("🧹 Limpar Conversa"):
             st.session_state.chat_history = []
+            st.session_state.last_question = None
+            st.session_state.processing = False
             st.rerun()
    
     st.markdown('</div>', unsafe_allow_html=True)
@@ -849,13 +935,7 @@ else:
             </p>
             <div style="background: var(--card-bg); padding: 20px; border-radius: 10px; max-width: 600px; margin: 0 auto;">
                 <h3 style="color: var(--text-color); margin-top: 0;">🚀 Como usar:</h3>
-                <ol style="text-align: left; color: var(--text-color">
-        """,
-        unsafe_allow_html=True
-    )
-    # A última tag não está fechada, continuando a lista em Python...
-    st.markdown(
-        """
+                <ol style="text-align: left; color: var(--text-color)">
                 <li>Clique no botão <span style='font-size: 1.2em; font-weight: bold;'>&lt;</span> no canto superior esquerdo para abrir a barra lateral.</li>
                 <li>Conecte-se ao Google Sheets ou faça upload de arquivos Excel/CSV.</li>
                 <li>Digite sua pergunta na caixa de chat (ex: 'Qual a receita total em Janeiro?').</li>
