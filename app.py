@@ -284,13 +284,16 @@ st.markdown(
         -webkit-text-fill-color: transparent;
     }
     .main-header::before {
-        content: "⭐";
+        content: "";
         display: inline-block;
+        width: 40px;
+        height: 40px;
         background: linear-gradient(135deg, #667eea, #764ba2);
-        padding: 8px 12px;
         border-radius: 8px;
-        margin-right: 10px;
-        font-size: 1.8rem;
+        margin-right: 15px;
+        vertical-align: middle;
+        position: relative;
+        top: -3px;
     }
     /* Stats boxes */
     .stat-box {
@@ -332,11 +335,11 @@ st.markdown(
         color: var(--text-color) !important;
     }
     
-    /* ÍCONE DE TABELA NO BOT */
+    /* ÍCONE DE PLANILHA NO BOT */
     .bot-icon {
         display: inline-block;
-        width: 24px;
-        height: 24px;
+        width: 28px;
+        height: 28px;
         margin-right: 8px;
         vertical-align: middle;
         position: relative;
@@ -559,14 +562,27 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Ícone SVG de tabela (preto)
+# Ícone de planilha com fundo roxo-azulado (quadrado)
 TABLE_ICON_SVG = """
 <svg class="bot-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="3" y="3" width="18" height="18" rx="2" stroke="black" stroke-width="2" fill="none"/>
-    <line x1="3" y1="9" x2="21" y2="9" stroke="black" stroke-width="2"/>
-    <line x1="3" y1="15" x2="21" y2="15" stroke="black" stroke-width="2"/>
-    <line x1="9" y1="3" x2="9" y2="21" stroke="black" stroke-width="2"/>
-    <line x1="15" y1="3" x2="15" y2="21" stroke="black" stroke-width="2"/>
+    <!-- Fundo roxo-azulado com bordas arredondadas -->
+    <rect x="2" y="2" width="20" height="20" rx="3" fill="url(#gradient)" />
+    <defs>
+        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+        </linearGradient>
+    </defs>
+    <!-- Ícone de planilha branco -->
+    <path d="M7 6 L7 18 L14 18 L17 15 L17 6 Z" fill="white" stroke="white" stroke-width="0.3"/>
+    <path d="M14 6 L14 15 L17 15" fill="none" stroke="white" stroke-width="0.3"/>
+    <!-- Grade da planilha -->
+    <line x1="8" y1="9" x2="13" y2="9" stroke="#667eea" stroke-width="0.4"/>
+    <line x1="8" y1="11" x2="13" y2="11" stroke="#667eea" stroke-width="0.4"/>
+    <line x1="8" y1="13" x2="13" y2="13" stroke="#667eea" stroke-width="0.4"/>
+    <line x1="8" y1="15" x2="13" y2="15" stroke="#667eea" stroke-width="0.4"/>
+    <line x1="10" y1="7.5" x2="10" y2="16" stroke="#667eea" stroke-width="0.4"/>
+    <line x1="11.5" y1="7.5" x2="11.5" y2="16" stroke="#667eea" stroke-width="0.4"/>
 </svg>
 """
 
