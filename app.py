@@ -10,11 +10,76 @@ from google.oauth2.service_account import Credentials
 import time
 import warnings
 warnings.filterwarnings('ignore')
+
+# ═══════════════════════════════════════════════════════════════
+# 🎨 TELA DE CARREGAMENTO PERSONALIZADA
+# ═══════════════════════════════════════════════════════════════
+st.markdown("""
+    <style>
+    /* Tela de loading customizada */
+    .loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+    
+    .loading-text {
+        color: #000000;
+        font-size: 24px;
+        font-weight: 600;
+        margin-top: 20px;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    </style>
+    
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Carregando InsightTab...</div>
+    </div>
+    
+    <script>
+        // Esconder loading após carregar a página
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                document.getElementById('loadingScreen').style.display = 'none';
+            }, 500);
+        });
+    </script>
+""", unsafe_allow_html=True)
+
 # ═══════════════════════════════════════════════════════════════
 # 🔑 CONFIGURAÇÃO DAS APIs
 # ═══════════════════════════════════════════════════════════════
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GOOGLE_SHEETS_CREDENTIALS = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
+
 # IDs das planilhas no Google Sheets
 SHEET_IDS = {
     "Janeiro 2024": os.getenv('GOOGLE_SHEET_ID_JANEIRO'),
@@ -30,99 +95,89 @@ SHEET_IDS = {
     "Novembro 2024": os.getenv('GOOGLE_SHEET_ID_NOVEMBRO'),
     "Dezembro 2024": os.getenv('GOOGLE_SHEET_ID_DEZEMBRO'),
 }
+
 # Lista de nomes das planilhas do Google Sheets (para identificação)
 GOOGLE_SHEETS_NAMES = list(SHEET_IDS.keys())
+
 # Validar API Keys
 if not GEMINI_API_KEY:
     st.error("❌ API Key GEMINI_API_KEY não encontrada!")
     st.error("👉 Render Dashboard > Environment > Adicione: GEMINI_API_KEY = sua_chave")
     st.stop()
+
 if not GOOGLE_SHEETS_CREDENTIALS:
     st.warning("⚠️ Google Sheets não configurado. Modo upload manual ativado.")
     GOOGLE_SHEETS_ENABLED = False
 else:
     GOOGLE_SHEETS_ENABLED = True
+
 # Configurar Gemini
 genai.configure(api_key=GEMINI_API_KEY)
+
 # ═══════════════════════════════════════════════════════════════
 # 📊 FUNÇÃO PARA CARREGAR GOOGLE SHEETS
 # ═══════════════════════════════════════════════════════════════
-@st.cache_data(ttl=300) # Cache por 5 minutos
+@st.cache_data(ttl=300)
 def carregar_google_sheets():
     """Carrega dados das planilhas do Google Sheets"""
     if not GOOGLE_SHEETS_ENABLED:
         return {}
    
     try:
-        # Parsear credenciais JSON
         creds_dict = json.loads(GOOGLE_SHEETS_CREDENTIALS)
-       
-        # Criar credenciais
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-       
-        # Conectar ao Google Sheets
         client = gspread.authorize(credentials)
-       
         dataframes = {}
        
-        # Carregar cada planilha configurada
         for nome, sheet_id in SHEET_IDS.items():
-            if sheet_id: # Só carregar se o ID foi configurado
+            if sheet_id:
                 try:
                     spreadsheet = client.open_by_key(sheet_id)
-                   
-                    # Pegar todas as abas da planilha
                     for worksheet in spreadsheet.worksheets():
-                        # Converter para DataFrame
                         data = worksheet.get_all_values()
-                        if len(data) > 1: # Tem header e dados
+                        if len(data) > 1:
                             df = pd.DataFrame(data[1:], columns=data[0])
-                           
-                            # Tentar converter colunas numéricas
                             for col in df.columns:
                                 try:
                                     df[col] = pd.to_numeric(df[col])
                                 except:
                                     pass
-                           
-                            # Nome da aba
                             aba_nome = worksheet.title
                             key = f"{nome} - {aba_nome}" if aba_nome != "Sheet1" else nome
                             dataframes[key] = df
                 except Exception as e:
                     st.warning(f"⚠️ Erro ao carregar {nome}: {str(e)}")
                     continue
-       
         return dataframes
-   
     except json.JSONDecodeError:
         st.error("❌ Erro: Credenciais do Google Sheets inválidas!")
         return {}
-   
     except Exception as e:
         st.error(f"❌ Erro ao conectar Google Sheets: {str(e)}")
         return {}
+
 # ═══════════════════════════════════════════════════════════════
 MODEL_TIMEOUT = 60
 MODEL_RETRIES = 2
 RETRY_BACKOFF = 2.0
-SAMPLE_SIZE = 1000  # Aumentado de 500 para 1000 linhas
+SAMPLE_SIZE = 1000
 MAX_OUTPUT_TOKENS = 1024
+
 st.set_page_config(
     page_title="InsightTab - Analista Inteligente",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
 # ========== ESTADO INICIAL ==========
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "dataframes" not in st.session_state:
-    # Tentar carregar do Google Sheets automaticamente
     st.session_state.dataframes = carregar_google_sheets()
     if st.session_state.dataframes:
         st.success(f"✅ {len(st.session_state.dataframes)} planilha(s) carregada(s) do Google Sheets!")
@@ -132,6 +187,7 @@ if "uploaded_file_keys" not in st.session_state:
     st.session_state.uploaded_file_keys = []
 if "last_question" not in st.session_state:
     st.session_state.last_question = None
+
 # ========== CSS MODO ESCURO FIXO ==========
 st.markdown(
     """
@@ -145,134 +201,58 @@ st.markdown(
         --muted-color: #9aa6b2;
         --accent: #667eea;
     }
-    /* Background principal - FORÇAR ESCURO EM TUDO */
+    
     .stApp, body, .main, .block-container {
         background-color: var(--app-bg) !important;
         color: var(--text-color) !important;
     }
-    /* Forçar fundo escuro na área do conteúdo */
+    
     .main .block-container {
         background-color: var(--app-bg) !important;
     }
-    /* Remover qualquer fundo branco */
+    
     .element-container, .stMarkdown, div[data-testid="stVerticalBlock"] {
         background-color: transparent !important;
     }
-    /* Sidebar - melhorar contraste */
+    
     [data-testid="stSidebar"] {
         background-color: var(--panel-bg) !important;
     }
+    
     [data-testid="stSidebar"] * {
         color: var(--text-color) !important;
     }
-    /* Títulos da sidebar mais visíveis */
+    
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
         color: var(--text-color) !important;
         font-weight: 600 !important;
     }
-    /* Labels da sidebar */
+    
     [data-testid="stSidebar"] label {
         color: var(--text-color) !important;
         font-weight: 500 !important;
     }
-    /* Texto da sidebar */
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] div {
-        color: var(--text-color) !important;
+    
+    /* LAYOUT DA LISTA DE PLANILHAS */
+    .sheet-list-item {
+        margin: 8px 0;
     }
-    /* BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR */
-    .sidebar-toggle-btn {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 999999;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        border: none;
-        border-radius: 10px;
-        width: 50px;
-        height: 50px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        transition: all 0.3s ease;
+    
+    [data-testid="collapsedControl"] {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 10px !important;
+        width: 50px !important;
+        height: 50px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
     }
-    .sidebar-toggle-btn:hover {
-        transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-    }
-    .sidebar-toggle-btn svg {
-        fill: white;
-        width: 24px;
-        height: 24px;
-    }
-    /* Esconder botão customizado quando sidebar está aberta */
-    [data-testid="stSidebar"][aria-expanded="true"] ~ div .sidebar-toggle-btn {
-        display: none !important;
-    }
-   
-    /* Mostrar botão customizado quando sidebar está fechada */
-    [data-testid="stSidebar"][aria-expanded="false"] ~ div .sidebar-toggle-btn {
-        display: flex !important;
-    }
-    /* Botão de abrir/fechar sidebar - EXTERNO */
-    button[kind="header"] {
-        color: white !important;
-    }
-    button[kind="header"] svg {
-        fill: white !important;
-        stroke: white !important;
-    }
-    /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
-   [data-testid="collapsedControl"] {
-    background: rgba(255, 255, 255, 0.1) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    border-radius: 10px !important;
-    width: 50px !important;
-    height: 50px !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-    transition: all 0.3s ease !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
-[data-testid="collapsedControl"] svg {
-    fill: white !important;
-    width: 24px !important;
-    height: 24px !important;
-}
-    [data-testid="collapsedControl"]:hover {
-        transform: scale(1.1) !important;
-        box-shadow: 0 6px 20px rgba(255, 111, 97, 0.8) !important;
-    }
-    [data-testid="collapsedControl"] > div {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
+    
     [data-testid="collapsedControl"] svg {
         fill: white !important;
         width: 24px !important;
         height: 24px !important;
     }
-    /* Botão do menu superior (fora da sidebar) */
-    header[data-testid="stHeader"] button {
-        color: white !important;
-    }
-    header[data-testid="stHeader"] button svg {
-        fill: white !important;
-        stroke: white !important;
-    }
-    /* Forçar todos os botões do header */
-    [data-testid="stHeader"] button[kind="header"], [data-testid="stHeader"] button {
-        color: white !important;
-    }
-    [data-testid="stHeader"] button[kind="header"] svg, [data-testid="stHeader"] button svg {
-        fill: white !important;
-        stroke: white !important;
-        color: white !important;
-    }
-    /* Header principal com ícone de estrela */
+    
     .main-header {
         font-size: 2.8rem;
         font-weight: 700;
@@ -283,6 +263,7 @@ st.markdown(
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
+    
     .main-header::before {
         content: "";
         display: inline-block;
@@ -295,7 +276,7 @@ st.markdown(
         position: relative;
         top: -3px;
     }
-    /* Stats boxes */
+    
     .stat-box {
         background: linear-gradient(135deg, #1a1f26, #2d3748);
         padding: 18px;
@@ -305,7 +286,7 @@ st.markdown(
         margin: 10px 0;
         border: 1px solid rgba(102, 126, 234, 0.2);
     }
-    /* Painéis */
+    
     .panel {
         background: var(--panel-bg);
         padding: 20px;
@@ -313,7 +294,7 @@ st.markdown(
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         border: 1px solid rgba(255,255,255,0.05);
     }
-    /* Mensagens do chat */
+    
     .chat-message {
         padding: 15px;
         border-radius: 10px;
@@ -323,19 +304,21 @@ st.markdown(
         word-wrap: break-word;
         position: relative;
     }
+    
     .user-message {
         background: rgba(66,153,225,0.12);
         border-left: 4px solid rgba(66,153,225,1);
     }
+    
     .bot-message {
         background: rgba(156,39,176,0.1);
         border-left: 4px solid rgba(156,39,176,1);
     }
+    
     .chat-message, .chat-message * {
         color: var(--text-color) !important;
     }
     
-    /* ÍCONE DE PLANILHA NO BOT */
     .bot-icon {
         display: inline-block;
         width: 28px;
@@ -346,7 +329,6 @@ st.markdown(
         top: -2px;
     }
     
-    /* Cor do elemento ID/Nome (código inline) */
     .chat-message code {
         color: var(--accent) !important;
         background-color: rgba(102, 126, 234, 0.15) !important;
@@ -356,7 +338,6 @@ st.markdown(
         font-size: 0.9em;
     }
     
-    /* MENSAGEM DE PROCESSAMENTO */
     .processing-message {
         padding: 15px;
         border-radius: 10px;
@@ -364,15 +345,14 @@ st.markdown(
         background: rgba(102, 126, 234, 0.1);
         border-left: 4px solid rgba(102, 126, 234, 1);
         color: var(--text-color) !important;
-        animation: pulse 1.5s ease-in-out infinite;
+        animation: pulse-anim 1.5s ease-in-out infinite;
     }
     
-    @keyframes pulse {
+    @keyframes pulse-anim {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.6; }
     }
     
-    /* Inputs e formulários */
     .stTextInput>div>div>input, .stTextArea>div>div>textarea {
         background-color: var(--card-bg) !important;
         color: var(--text-color) !important;
@@ -380,21 +360,22 @@ st.markdown(
         border-radius: 8px;
         caret-color: white !important;
     }
+    
     .stTextInput>label, .stTextArea>label {
         color: var(--text-color) !important;
         font-weight: 500;
     }
-    /* Placeholder branco */
+    
     .stTextInput>div>div>input::placeholder, .stTextArea>div>div>textarea::placeholder {
         color: rgba(255, 255, 255, 0.5) !important;
         opacity: 1 !important;
     }
-    /* Foco nos inputs */
+    
     .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus {
         border-color: var(--accent) !important;
         box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
     }
-    /* Botões PADRÃO (roxo com gradiente) */
+    
     .stButton>button {
         background: linear-gradient(90deg, #667eea, #764ba2);
         color: white !important;
@@ -404,11 +385,12 @@ st.markdown(
         transition: all 0.3s;
         width: 100%;
     }
+    
     .stButton>button:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
-    /* BOTÃO DE ENVIAR (azul escuro com texto branco) - FORÇADO */
+    
     div[data-testid="stForm"] button[kind="formSubmit"],
     button[kind="formSubmit"],
     .stFormSubmitButton button,
@@ -426,6 +408,7 @@ st.markdown(
         display: inline-block !important;
         min-width: 120px !important;
     }
+    
     div[data-testid="stForm"] button[kind="formSubmit"]:hover,
     button[kind="formSubmit"]:hover,
     .stFormSubmitButton button:hover,
@@ -437,7 +420,7 @@ st.markdown(
         transform: translateY(-2px) !important;
         box-shadow: 0 4px 12px rgba(26, 58, 92, 0.6) !important;
     }
-    /* Forçar cor do texto do botão e todos os elementos internos */
+    
     div[data-testid="stForm"] button[kind="formSubmit"] *,
     button[kind="formSubmit"] *,
     .stFormSubmitButton button *,
@@ -445,105 +428,115 @@ st.markdown(
     div[data-testid="stForm"] button p {
         color: white !important;
     }
-    /* File uploader - MODO ESCURO */
+    
     [data-testid="stFileUploader"] {
         background-color: var(--card-bg) !important;
         border: 2px dashed rgba(102, 126, 234, 0.5) !important;
         border-radius: 10px !important;
         padding: 25px !important;
     }
+    
     [data-testid="stFileUploader"] * {
         color: var(--text-color) !important;
     }
+    
     [data-testid="stFileUploader"] section {
         background-color: var(--card-bg) !important;
         border: none !important;
     }
+    
     [data-testid="stFileUploader"] button {
         background-color: rgba(102, 126, 234, 0.2) !important;
         color: var(--text-color) !important;
         border: 1px solid rgba(102, 126, 234, 0.4) !important;
     }
+    
     [data-testid="stFileUploader"] small {
         color: var(--muted-color) !important;
     }
-    /* Tradução do texto do file uploader */
+    
     [data-testid="stFileUploader"] span[data-testid="stMarkdownContainer"] p {
         color: var(--text-color) !important;
     }
-    /* DataFrames */
+    
     .stDataFrame {
         background-color: var(--panel-bg) !important;
     }
+    
     .stDataFrame * {
         color: var(--text-color) !important;
     }
-    /* Spinner */
+    
     .stSpinner > div {
         border-top-color: var(--accent) !important;
     }
-    /* Esconder footer padrão do Streamlit */
+    
     footer {
         visibility: hidden;
     }
+    
     footer:after {
         content: '';
         visibility: hidden;
     }
-    /* Remover "Made with Streamlit" */
+    
     .viewerBadge_container__1QSob {
         display: none !important;
     }
-    /* Markdown */
+    
     .stMarkdown {
         color: var(--text-color) !important;
     }
-    /* Selectbox */
+    
     .stSelectbox>div>div>div {
         background-color: var(--card-bg) !important;
         color: var(--text-color) !important;
     }
-    /* Success/Error/Warning messages */
+    
     .stAlert {
         background-color: var(--panel-bg) !important;
         color: var(--text-color) !important;
         border-radius: 8px;
     }
-    /* ESCONDER TABS (remover visualizar dados) */
+    
     .stTabs {
         display: none !important;
     }
-    /* FORÇAR REMOÇÃO DE QUALQUER FUNDO BRANCO */
+    
     section[data-testid="stAppViewContainer"] {
         background-color: var(--app-bg) !important;
     }
+    
     header[data-testid="stHeader"] {
         background-color: transparent !important;
     }
-    /* Container principal */
+    
     .main {
         background-color: var(--app-bg) !important;
     }
-    /* Todos os elementos precisam ser escuros */
+    
     * {
         scrollbar-color: var(--muted-color) var(--app-bg);
     }
-    /* Scrollbar customizada */
+    
     ::-webkit-scrollbar {
         width: 10px;
         height: 10px;
     }
+    
     ::-webkit-scrollbar-track {
         background: var(--app-bg);
     }
+    
     ::-webkit-scrollbar-thumb {
         background: var(--muted-color);
         border-radius: 5px;
     }
+    
     ::-webkit-scrollbar-thumb:hover {
         background: var(--accent);
     }
-    /* Forçar ícones ou textos com a classe .texto-branco a ficarem brancos */
+    
     .texto-branco, 
     .texto-branco svg, 
     .texto-branco path {
@@ -551,7 +544,7 @@ st.markdown(
         fill: white !important;
         stroke: white !important;
     }
-    /* Forçar cor branca em todos os ícones padrão do Streamlit keyboard_double_arrow_right */
+    
     span[data-testid="stIconMaterial"] {
         color: white !important;
         fill: white !important;
@@ -562,10 +555,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Ícone de planilha com fundo roxo-azulado (quadrado)
 TABLE_ICON_SVG = """
 <svg class="bot-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <!-- Fundo roxo-azulado com bordas arredondadas -->
     <rect x="2" y="2" width="20" height="20" rx="3" fill="url(#gradient)" />
     <defs>
         <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -573,10 +564,8 @@ TABLE_ICON_SVG = """
             <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
         </linearGradient>
     </defs>
-    <!-- Ícone de planilha branco -->
     <path d="M7 6 L7 18 L14 18 L17 15 L17 6 Z" fill="white" stroke="white" stroke-width="0.3"/>
     <path d="M14 6 L14 15 L17 15" fill="none" stroke="white" stroke-width="0.3"/>
-    <!-- Grade da planilha -->
     <line x1="8" y1="9" x2="13" y2="9" stroke="#667eea" stroke-width="0.4"/>
     <line x1="8" y1="11" x2="13" y2="11" stroke="#667eea" stroke-width="0.4"/>
     <line x1="8" y1="13" x2="13" y2="13" stroke="#667eea" stroke-width="0.4"/>
@@ -591,6 +580,7 @@ try:
     model = genai.GenerativeModel("gemini-2.5-flash")
 except Exception:
     model = None
+
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
     """Lê arquivo Excel ou CSV e retorna DataFrame"""
@@ -635,7 +625,6 @@ def read_uploaded_file_to_df(uploaded_file):
 
 def is_google_sheets_data(filename):
     """Verifica se uma planilha veio do Google Sheets"""
-    # Verifica se o nome começa com algum dos nomes das planilhas do Google Sheets
     for sheet_name in GOOGLE_SHEETS_NAMES:
         if filename.startswith(sheet_name):
             return True
@@ -652,7 +641,6 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
     for filename, df in dataframes.items():
         if isinstance(df, dict):
             for sheet_name, sheet_df in df.items():
-                # Usar todas as linhas (limitado por sample_size se necessário)
                 if len(sheet_df) <= sample_size:
                     preview = sheet_df.to_string(index=False)
                 else:
@@ -661,7 +649,6 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 all_data += f"\n--- Planilha: {sheet_name} ({len(sheet_df)} linhas) ---\n{preview}\n"
                 total_rows += len(sheet_df)
         else:
-            # Usar todas as linhas (limitado por sample_size se necessário)
             if len(df) <= sample_size:
                 preview = df.to_string(index=False)
             else:
@@ -690,12 +677,10 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
     """Chamada síncrona ao modelo"""
     if model is None:
         raise RuntimeError("Modelo não configurado.")
-   
     try:
         resp = model.generate_content(prompt, max_output_tokens=max_output_tokens)
     except TypeError:
         resp = model.generate_content(prompt)
-   
     return getattr(resp, "text", str(resp))
 
 def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
@@ -721,7 +706,6 @@ st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', un
 with st.sidebar:
     st.markdown("### 📂 Gerenciar Dados")
    
-    # Status do Google Sheets
     if GOOGLE_SHEETS_ENABLED:
         st.success("✅ Google Sheets conectado!")
         if st.button("🔄 Recarregar Google Sheets", use_container_width=True):
@@ -762,50 +746,35 @@ with st.sidebar:
                         st.error(f"❌ {file.name}: {str(e)}")
             st.rerun()
    
-    # Mostrar dados carregados
     if st.session_state.dataframes:
         st.markdown("---")
         st.markdown("### ✅ Dados Disponíveis")
-        total_rows = 0
-        for filename, df in st.session_state.dataframes.items():
+        
+        # Lista de planilhas com botão de exclusão individual
+        for filename in list(st.session_state.dataframes.keys()):
+            df = st.session_state.dataframes[filename]
             rows = len(df)
-            # Identificar origem usando a nova função
-            if is_google_sheets_data(filename):
-                badge = "☁️" # Google Sheets
-            else:
-                badge = "📄" # Upload manual
-            st.markdown(f"{badge} **{filename}**<br><small>{rows} linhas</small>", unsafe_allow_html=True)
-            total_rows += rows
-       
+            badge = "☁️" if is_google_sheets_data(filename) else "📄"
+            
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.markdown(f"{badge} **{filename}**<br><small>{rows} linhas</small>", unsafe_allow_html=True)
+            with col2:
+                if st.button("❌", key=f"delete_{filename}", help="Excluir planilha"):
+                    del st.session_state.dataframes[filename]
+                    st.rerun()
+        
+        total_rows = sum(len(df) for df in st.session_state.dataframes.values())
         st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
-   
-    # Verificar se existem planilhas manuais usando a nova função
-    has_manual_sheets = any(
-        not is_google_sheets_data(filename) for filename in st.session_state.dataframes.keys()
-    )
-   
-    if has_manual_sheets:
-        if st.button("🗑️ Limpar Planilhas Manuais", use_container_width=True):
-            # Manter apenas planilhas do Google Sheets usando a nova função
-            google_sheets_data = {
-                k: v for k, v in st.session_state.dataframes.items() if is_google_sheets_data(k)
-            }
-            st.session_state.dataframes = google_sheets_data
-            st.session_state.uploaded_file_keys.append(time.time())
-            st.success("✅ Planilhas manuais removidas!")
-            st.rerun()
 
 # ========== FUNÇÃO PARA EXIBIR CHAT ==========
 def render_chat_history():
-    """Renderiza o histórico do chat sem duplicação"""
-    for i, chat in enumerate(st.session_state.chat_history):
-        # Mensagem do usuário
+    """Renderiza o histórico do chat"""
+    for chat in st.session_state.chat_history:
         st.markdown(
             f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
             unsafe_allow_html=True
         )
-        
-        # Mensagem do bot
         st.markdown(
             f'<div class="chat-message bot-message"><b>{TABLE_ICON_SVG} InsightTab:</b><br>{chat["answer"]}</div>',
             unsafe_allow_html=True
@@ -815,18 +784,11 @@ def render_chat_history():
 # ========== ÁREA PRINCIPAL - CHAT ==========
 if st.session_state.dataframes:
     st.markdown('<div class="panel">', unsafe_allow_html=True)
-   
-    # Renderizar histórico do chat (SEM DUPLICAÇÃO)
     render_chat_history()
     
-    # Mostrar mensagem de processamento se estiver processando
     if st.session_state.processing:
-        st.markdown(
-            '<div class="processing-message"><b>🤖 Analisando sua pergunta...</b></div>',
-            unsafe_allow_html=True
-        )
+        st.markdown('<div class="processing-message"><b>🤖 Analisando sua pergunta...</b></div>', unsafe_allow_html=True)
    
-    # Input
     with st.form(key="chat_form", clear_on_submit=True):
         user_question = st.text_input(
             "💭 Faça sua pergunta:",
@@ -839,24 +801,15 @@ if st.session_state.dataframes:
             submit = st.form_submit_button("📤 Enviar", use_container_width=True)
    
     if submit and user_question and not st.session_state.processing:
-        # Verificar se não é a mesma pergunta (evitar duplicação)
         if user_question != st.session_state.last_question:
             st.session_state.processing = True
             st.session_state.last_question = user_question
-            
-            # Adicionar pergunta ao histórico
-            st.session_state.chat_history.append({
-                "question": user_question, 
-                "answer": ""
-            })
-            
-            # Recarregar para mostrar mensagem de processamento
+            st.session_state.chat_history.append({"question": user_question, "answer": ""})
             st.rerun()
    
-    # Processar pergunta se estiver em modo de processamento
     if st.session_state.processing and st.session_state.chat_history:
         last_chat = st.session_state.chat_history[-1]
-        if last_chat["answer"] == "":  # Ainda não processado
+        if last_chat["answer"] == "":
             prompt = build_prompt_with_data(last_chat["question"], st.session_state.dataframes)
             try:
                 answer = call_model_with_timeout(prompt)
@@ -864,8 +817,6 @@ if st.session_state.dataframes:
                 answer = "⏱️ Tempo limite atingido. Tente uma pergunta mais simples."
             except Exception as e:
                 answer = f"❌ Erro: {str(e)}"
-           
-            # Atualizar resposta
             st.session_state.chat_history[-1]["answer"] = answer
             st.session_state.processing = False
             st.rerun()
@@ -878,7 +829,6 @@ if st.session_state.dataframes:
    
     st.markdown('</div>', unsafe_allow_html=True)
    
-    # Stats
     st.markdown("---")
     total_files = len(st.session_state.dataframes)
     total_rows = sum(len(df) for df in st.session_state.dataframes.values())
@@ -890,18 +840,11 @@ if st.session_state.dataframes:
     with col3:
         st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{len(st.session_state.chat_history)}</h2><p style="margin:0;">Perguntas</p></div>', unsafe_allow_html=True)
 else:
-    # Tela inicial (sem dados)
     st.markdown('<div class="panel">', unsafe_allow_html=True)
-   
-    # Renderizar histórico do chat (SEM DUPLICAÇÃO)
     render_chat_history()
     
-    # Mostrar mensagem de processamento se estiver processando
     if st.session_state.processing:
-        st.markdown(
-            '<div class="processing-message"><b>🤖 Analisando sua pergunta...</b></div>',
-            unsafe_allow_html=True
-        )
+        st.markdown('<div class="processing-message"><b>🤖 Analisando sua pergunta...</b></div>', unsafe_allow_html=True)
    
     with st.form(key="nodata_form", clear_on_submit=True):
         user_question = st.text_input(
@@ -915,24 +858,15 @@ else:
             submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
    
     if submit_btn and user_question and not st.session_state.processing:
-        # Verificar se não é a mesma pergunta (evitar duplicação)
         if user_question != st.session_state.last_question:
             st.session_state.processing = True
             st.session_state.last_question = user_question
-            
-            # Adicionar pergunta ao histórico
-            st.session_state.chat_history.append({
-                "question": user_question, 
-                "answer": ""
-            })
-            
-            # Recarregar para mostrar mensagem de processamento
+            st.session_state.chat_history.append({"question": user_question, "answer": ""})
             st.rerun()
    
-    # Processar pergunta se estiver em modo de processamento
     if st.session_state.processing and st.session_state.chat_history:
         last_chat = st.session_state.chat_history[-1]
-        if last_chat["answer"] == "":  # Ainda não processado
+        if last_chat["answer"] == "":
             prompt = build_prompt_with_data(last_chat["question"], None)
             try:
                 answer = call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT)
@@ -940,8 +874,6 @@ else:
                 answer = f"⏱️ Tempo limite atingido ({MODEL_TIMEOUT}s). Tente novamente."
             except Exception as e:
                 answer = f"❌ Erro: {str(e)}"
-           
-            # Atualizar resposta
             st.session_state.chat_history[-1]["answer"] = answer
             st.session_state.processing = False
             st.rerun()
@@ -954,10 +886,8 @@ else:
             st.rerun()
    
     st.markdown('</div>', unsafe_allow_html=True)
-   
     st.markdown("---")
    
-    # Mensagem de boas-vindas
     st.markdown(
         """
         <div class="panel" style="text-align:center; padding: 60px 20px;">
