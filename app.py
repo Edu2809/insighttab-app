@@ -9,26 +9,13 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from google.oauth2.service_account import Credentials
 import time
 import warnings
-import hashlib
 warnings.filterwarnings('ignore')
 
 # ═══════════════════════════════════════════════════════════════
-# 🔑 CONFIGURAÇÃO DAS APIs COM ROTAÇÃO
+# 🔑 CONFIGURAÇÃO DAS APIs
 # ═══════════════════════════════════════════════════════════════
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GOOGLE_SHEETS_CREDENTIALS = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
-
-# Sistema de múltiplas chaves API (Rotação automática)
-GEMINI_API_KEYS = []
-for i in range(1, 11):  # Suporta até 10 chaves (GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc.)
-    key = os.getenv(f'GEMINI_API_KEY_{i}') or os.getenv(f'GEMINI_API_KEY{i}')
-    if key:
-        GEMINI_API_KEYS.append(key)
-
-# Fallback para chave única
-if not GEMINI_API_KEYS:
-    single_key = os.getenv('GEMINI_API_KEY')
-    if single_key:
-        GEMINI_API_KEYS.append(single_key)
 
 # IDs das planilhas no Google Sheets
 SHEET_IDS = {
@@ -46,15 +33,13 @@ SHEET_IDS = {
     "Dezembro 2024": os.getenv('GOOGLE_SHEET_ID_DEZEMBRO'),
 }
 
+# Lista de nomes das planilhas do Google Sheets (para identificação)
 GOOGLE_SHEETS_NAMES = list(SHEET_IDS.keys())
 
 # Validar API Keys
-if not GEMINI_API_KEYS:
-    st.error("❌ Nenhuma API Key do Gemini encontrada!")
-    st.error("👉 Render Dashboard > Environment > Adicione:")
-    st.error("   - GEMINI_API_KEY_1 = primeira_chave")
-    st.error("   - GEMINI_API_KEY_2 = segunda_chave (opcional)")
-    st.error("   - GEMINI_API_KEY_3 = terceira_chave (opcional)")
+if not GEMINI_API_KEY:
+    st.error("❌ API Key GEMINI_API_KEY não encontrada!")
+    st.error("👉 Render Dashboard > Environment > Adicione: GEMINI_API_KEY = sua_chave")
     st.stop()
 
 if not GOOGLE_SHEETS_CREDENTIALS:
@@ -63,14 +48,13 @@ if not GOOGLE_SHEETS_CREDENTIALS:
 else:
     GOOGLE_SHEETS_ENABLED = True
 
-# Estado para controle de rotação de chaves
-# MOVIDO PARA DEPOIS DE set_page_config E ANTES DE USAR
-# (já está corrigido acima no código)
+# Configurar Gemini
+genai.configure(api_key=GEMINI_API_KEY)
 
 # ═══════════════════════════════════════════════════════════════
 # 📊 FUNÇÃO PARA CARREGAR GOOGLE SHEETS
 # ═══════════════════════════════════════════════════════════════
-@st.cache_data(ttl=3600)  # AUMENTADO PARA 1 HORA
+@st.cache_data(ttl=300)
 def carregar_google_sheets():
     """Carrega dados das planilhas do Google Sheets"""
     if not GOOGLE_SHEETS_ENABLED:
@@ -114,13 +98,13 @@ def carregar_google_sheets():
         return {}
 
 # ═══════════════════════════════════════════════════════════════
-# ⚙️ CONFIGURAÇÕES OTIMIZADAS - REDUZIDAS PARA EVITAR LIMITE
+# ⚙️ CONFIGURAÇÕES OTIMIZADAS
 # ═══════════════════════════════════════════════════════════════
-MODEL_TIMEOUT = 120  # 2 minutos
-MODEL_RETRIES = 1  # APENAS 1 TENTATIVA - CRÍTICO!
-RETRY_BACKOFF = 2
-SAMPLE_SIZE = 1500
-MAX_OUTPUT_TOKENS = 2048
+MODEL_TIMEOUT = 180  # Aumentado para 3 minutos
+MODEL_RETRIES = 3  # Mais tentativas
+RETRY_BACKOFF = 1.5
+SAMPLE_SIZE = 2000  # Aumentado para 2000 linhas
+MAX_OUTPUT_TOKENS = 2048  # Dobrado para respostas mais completas
 
 st.set_page_config(
     page_title="InsightTab - Analista Inteligente",
@@ -129,77 +113,28 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ========== FUNÇÕES PARA GERAR HASH (EVITAR DUPLICAÇÃO) ==========
-def generate_question_hash(question):
-    """Gera hash único para cada pergunta"""
-    return hashlib.md5(question.encode()).hexdigest()
-
-# ========== ESTADO INICIAL - DEVE VIR ANTES DE QUALQUER USO ==========
+# ========== ESTADO INICIAL ==========
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "processing" not in st.session_state:
-    st.session_state.processing = False
-if "uploaded_file_keys" not in st.session_state:
-    st.session_state.uploaded_file_keys = []
-if "processed_questions" not in st.session_state:
-    st.session_state.processed_questions = set()
-if "last_submission_time" not in st.session_state:
-    st.session_state.last_submission_time = 0
-
-# INICIALIZAR VARIÁVEIS DE CONTROLE DE API - CRÍTICO!
-if "current_api_key_index" not in st.session_state:
-    st.session_state.current_api_key_index = 0
-if "api_key_failures" not in st.session_state:
-    st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
-if "last_api_call_time" not in st.session_state:
-    st.session_state.last_api_call_time = {}
-
-# Carregar dataframes após inicializar session_state
 if "dataframes" not in st.session_state:
     loading_placeholder = st.empty()
-    loading_placeholder.markdown('<div style="text-align: center; color: white; font-size: 24px;">Carregando o site...</div>', unsafe_allow_html=True)
+    loading_placeholder.markdown('<div style="text-align: center; color: black; font-size: 24px;">Carregando o site...</div>', unsafe_allow_html=True)
     st.session_state.dataframes = carregar_google_sheets()
     if st.session_state.dataframes:
         st.success(f"✅ {len(st.session_state.dataframes)} planilha(s) carregada(s) do Google Sheets!")
     loading_placeholder.empty()
+if "processing" not in st.session_state:
+    st.session_state.processing = False
+if "uploaded_file_keys" not in st.session_state:
+    st.session_state.uploaded_file_keys = []
+if "last_question" not in st.session_state:
+    st.session_state.last_question = None
 
-def get_next_available_api_key():
-    """Retorna a próxima chave API disponível com menos falhas"""
-    # Ordenar chaves por número de falhas (menor primeiro)
-    sorted_keys = sorted(st.session_state.api_key_failures.items(), key=lambda x: x[1])
-    
-    # Tentar encontrar uma chave que não falhou recentemente
-    for key_index, failures in sorted_keys:
-        # Se a chave tem menos de 3 falhas, usar ela
-        if failures < 3:
-            st.session_state.current_api_key_index = key_index
-            return GEMINI_API_KEYS[key_index], key_index
-    
-    # Se todas falharam muito, resetar contadores e usar a primeira
-    st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
-    st.session_state.current_api_key_index = 0
-    return GEMINI_API_KEYS[0], 0
-
-def mark_api_key_failed(key_index):
-    """Marca uma chave como falha"""
-    st.session_state.api_key_failures[key_index] += 1
-
-def check_rate_limit(key_index):
-    """Verifica se passou tempo suficiente desde a última chamada"""
-    current_time = time.time()
-    last_call = st.session_state.last_api_call_time.get(key_index, 0)
-    
-    # Exigir 3 segundos entre chamadas da mesma chave
-    if current_time - last_call < 3:
-        return False
-    
-    st.session_state.last_api_call_time[key_index] = current_time
-    return True
-
-# ========== CSS (MANTIDO IGUAL) ==========
+# ========== CSS MODO ESCURO FIXO ==========
 st.markdown(
     """
     <style>
+    /* Forçar modo escuro global */
     :root {
         --app-bg: #0b1116;
         --panel-bg: #1a1f26;
@@ -208,41 +143,107 @@ st.markdown(
         --muted-color: #9aa6b2;
         --accent: #667eea;
     }
+    /* Background principal - FORÇAR ESCURO EM TUDO */
     .stApp, body, .main, .block-container {
         background-color: var(--app-bg) !important;
         color: var(--text-color) !important;
     }
+    /* Forçar fundo escuro na área do conteúdo */
     .main .block-container {
         background-color: var(--app-bg) !important;
     }
+    /* Remover qualquer fundo branco */
     .element-container, .stMarkdown, div[data-testid="stVerticalBlock"] {
         background-color: transparent !important;
     }
+    /* Sidebar - melhorar contraste */
     [data-testid="stSidebar"] {
         background-color: var(--panel-bg) !important;
     }
     [data-testid="stSidebar"] * {
         color: var(--text-color) !important;
     }
+    /* Títulos da sidebar mais visíveis */
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
         color: var(--text-color) !important;
         font-weight: 600 !important;
     }
+    /* Labels da sidebar */
     [data-testid="stSidebar"] label {
         color: var(--text-color) !important;
         font-weight: 500 !important;
     }
+    /* Texto da sidebar */
     [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] div {
         color: var(--text-color) !important;
     }
-    [data-testid="collapsedControl"] {
-        background: rgba(255, 255, 255, 0.1) !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        border-radius: 10px !important;
-        width: 50px !important;
-        height: 50px !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-        transition: all 0.3s ease !important;
+    /* BOTÃO CUSTOMIZADO PARA ABRIR SIDEBAR */
+    .sidebar-toggle-btn {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 999999;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border: none;
+        border-radius: 10px;
+        width: 50px;
+        height: 50px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s ease;
+    }
+    .sidebar-toggle-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+    .sidebar-toggle-btn svg {
+        fill: white;
+        width: 24px;
+        height: 24px;
+    }
+    /* Esconder botão customizado quando sidebar está aberta */
+    [data-testid="stSidebar"][aria-expanded="true"] ~ div .sidebar-toggle-btn {
+        display: none !important;
+    }
+  
+    /* Mostrar botão customizado quando sidebar está fechada */
+    [data-testid="stSidebar"][aria-expanded="false"] ~ div .sidebar-toggle-btn {
+        display: flex !important;
+    }
+    /* Botão de abrir/fechar sidebar - EXTERNO */
+    button[kind="header"] {
+        color: white !important;
+    }
+    button[kind="header"] svg {
+        fill: white !important;
+        stroke: white !important;
+    }
+    /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
+   [data-testid="collapsedControl"] {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 10px !important;
+    width: 50px !important;
+    height: 50px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+    transition: all 0.3s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+[data-testid="collapsedControl"] svg {
+    fill: white !important;
+    width: 24px !important;
+    height: 24px !important;
+}
+    [data-testid="collapsedControl"]:hover {
+        transform: scale(1.1) !important;
+        box-shadow: 0 6px 20px rgba(255, 111, 97, 0.8) !important;
+    }
+    [data-testid="collapsedControl"] > div {
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -252,10 +253,24 @@ st.markdown(
         width: 24px !important;
         height: 24px !important;
     }
-    [data-testid="collapsedControl"]:hover {
-        transform: scale(1.1) !important;
-        box-shadow: 0 6px 20px rgba(255, 111, 97, 0.8) !important;
+    /* Botão do menu superior (fora da sidebar) */
+    header[data-testid="stHeader"] button {
+        color: white !important;
     }
+    header[data-testid="stHeader"] button svg {
+        fill: white !important;
+        stroke: white !important;
+    }
+    /* Forçar todos os botões do header */
+    [data-testid="stHeader"] button[kind="header"], [data-testid="stHeader"] button {
+        color: white !important;
+    }
+    [data-testid="stHeader"] button[kind="header"] svg, [data-testid="stHeader"] button svg {
+        fill: white !important;
+        stroke: white !important;
+        color: white !important;
+    }
+    /* Header principal com ícone de estrela */
     .main-header {
         font-size: 2.8rem;
         font-weight: 700;
@@ -278,6 +293,7 @@ st.markdown(
         position: relative;
         top: -3px;
     }
+    /* Stats boxes */
     .stat-box {
         background: linear-gradient(135deg, #1a1f26, #2d3748);
         padding: 18px;
@@ -287,6 +303,7 @@ st.markdown(
         margin: 10px 0;
         border: 1px solid rgba(102, 126, 234, 0.2);
     }
+    /* Painéis */
     .panel {
         background: var(--panel-bg);
         padding: 20px;
@@ -294,6 +311,7 @@ st.markdown(
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         border: 1px solid rgba(255,255,255,0.05);
     }
+    /* Mensagens do chat */
     .chat-message {
         padding: 15px;
         border-radius: 10px;
@@ -314,6 +332,8 @@ st.markdown(
     .chat-message, .chat-message * {
         color: var(--text-color) !important;
     }
+   
+    /* ÍCONE DE PLANILHA NO BOT */
     .bot-icon {
         display: inline-block;
         width: 28px;
@@ -323,6 +343,8 @@ st.markdown(
         position: relative;
         top: -2px;
     }
+   
+    /* Cor do elemento ID/Nome (código inline) */
     .chat-message code {
         color: var(--accent) !important;
         background-color: rgba(102, 126, 234, 0.15) !important;
@@ -331,6 +353,8 @@ st.markdown(
         font-family: inherit !important;
         font-size: 0.9em;
     }
+   
+    /* MENSAGEM DE PROCESSAMENTO */
     .processing-message {
         padding: 15px;
         border-radius: 10px;
@@ -340,10 +364,13 @@ st.markdown(
         color: var(--text-color) !important;
         animation: pulse 1.5s ease-in-out infinite;
     }
+   
     @keyframes pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.6; }
     }
+   
+    /* Inputs e formulários */
     .stTextInput>div>div>input, .stTextArea>div>div>textarea {
         background-color: var(--card-bg) !important;
         color: var(--text-color) !important;
@@ -355,14 +382,17 @@ st.markdown(
         color: var(--text-color) !important;
         font-weight: 500;
     }
+    /* Placeholder branco */
     .stTextInput>div>div>input::placeholder, .stTextArea>div>div>textarea::placeholder {
         color: rgba(255, 255, 255, 0.5) !important;
         opacity: 1 !important;
     }
+    /* Foco nos inputs */
     .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus {
         border-color: var(--accent) !important;
         box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
     }
+    /* Botões PADRÃO (roxo com gradiente) */
     .stButton>button {
         background: linear-gradient(90deg, #667eea, #764ba2);
         color: white !important;
@@ -376,6 +406,7 @@ st.markdown(
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
+    /* BOTÃO DE ENVIAR (azul escuro com texto branco) - FORÇADO */
     div[data-testid="stForm"] button[kind="formSubmit"],
     button[kind="formSubmit"],
     .stFormSubmitButton button,
@@ -404,6 +435,7 @@ st.markdown(
         transform: translateY(-2px) !important;
         box-shadow: 0 4px 12px rgba(26, 58, 92, 0.6) !important;
     }
+    /* Forçar cor do texto do botão e todos os elementos internos */
     div[data-testid="stForm"] button[kind="formSubmit"] *,
     button[kind="formSubmit"] *,
     .stFormSubmitButton button *,
@@ -411,6 +443,7 @@ st.markdown(
     div[data-testid="stForm"] button p {
         color: white !important;
     }
+    /* File uploader - MODO ESCURO */
     [data-testid="stFileUploader"] {
         background-color: var(--card-bg) !important;
         border: 2px dashed rgba(102, 126, 234, 0.5) !important;
@@ -432,15 +465,22 @@ st.markdown(
     [data-testid="stFileUploader"] small {
         color: var(--muted-color) !important;
     }
+    /* Tradução do texto do file uploader */
+    [data-testid="stFileUploader"] span[data-testid="stMarkdownContainer"] p {
+        color: var(--text-color) !important;
+    }
+    /* DataFrames */
     .stDataFrame {
         background-color: var(--panel-bg) !important;
     }
     .stDataFrame * {
         color: var(--text-color) !important;
     }
+    /* Spinner */
     .stSpinner > div {
         border-top-color: var(--accent) !important;
     }
+    /* Esconder footer padrão do Streamlit */
     footer {
         visibility: hidden;
     }
@@ -448,36 +488,45 @@ st.markdown(
         content: '';
         visibility: hidden;
     }
+    /* Remover "Made with Streamlit" */
     .viewerBadge_container__1QSob {
         display: none !important;
     }
+    /* Markdown */
     .stMarkdown {
         color: var(--text-color) !important;
     }
+    /* Selectbox */
     .stSelectbox>div>div>div {
         background-color: var(--card-bg) !important;
         color: var(--text-color) !important;
     }
+    /* Success/Error/Warning messages */
     .stAlert {
         background-color: var(--panel-bg) !important;
         color: var(--text-color) !important;
         border-radius: 8px;
     }
+    /* ESCONDER TABS (remover visualizar dados) */
     .stTabs {
         display: none !important;
     }
+    /* FORÇAR REMOÇÃO DE QUALQUER FUNDO BRANCO */
     section[data-testid="stAppViewContainer"] {
         background-color: var(--app-bg) !important;
     }
     header[data-testid="stHeader"] {
         background-color: transparent !important;
     }
+    /* Container principal */
     .main {
         background-color: var(--app-bg) !important;
     }
+    /* Todos os elementos precisam ser escuros */
     * {
         scrollbar-color: var(--muted-color) var(--app-bg);
     }
+    /* Scrollbar customizada */
     ::-webkit-scrollbar {
         width: 10px;
         height: 10px;
@@ -492,13 +541,29 @@ st.markdown(
     ::-webkit-scrollbar-thumb:hover {
         background: var(--accent);
     }
+    /* Forçar ícones ou textos com a classe .texto-branco a ficarem brancos */
+    .texto-branco,
+    .texto-branco svg,
+    .texto-branco path {
+        color: white !important;
+        fill: white !important;
+        stroke: white !important;
+    }
+    /* Forçar cor branca em todos os ícones padrão do Streamlit keyboard_double_arrow_right */
+    span[data-testid="stIconMaterial"] {
+        color: white !important;
+        fill: white !important;
+        stroke: white !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+# Ícone de planilha com fundo roxo-azulado (quadrado)
 TABLE_ICON_SVG = """
 <svg class="bot-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Fundo roxo-azulado com bordas arredondadas -->
     <rect x="2" y="2" width="20" height="20" rx="3" fill="url(#gradient)" />
     <defs>
         <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -506,8 +571,10 @@ TABLE_ICON_SVG = """
             <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
         </linearGradient>
     </defs>
+    <!-- Ícone de planilha branco -->
     <path d="M7 6 L7 18 L14 18 L17 15 L17 6 Z" fill="white" stroke="white" stroke-width="0.3"/>
     <path d="M14 6 L14 15 L17 15" fill="none" stroke="white" stroke-width="0.3"/>
+    <!-- Grade da planilha -->
     <line x1="8" y1="9" x2="13" y2="9" stroke="#667eea" stroke-width="0.4"/>
     <line x1="8" y1="11" x2="13" y2="11" stroke="#667eea" stroke-width="0.4"/>
     <line x1="8" y1="13" x2="13" y2="13" stroke="#667eea" stroke-width="0.4"/>
@@ -517,9 +584,23 @@ TABLE_ICON_SVG = """
 </svg>
 """
 
-# ========== CONFIGURAR GEMINI ==========
-# Remover configuração única - agora usa rotação dinâmica
-# A configuração é feita dentro de _call_model_sync()
+# ========== CONFIGURAR GEMINI COM PARÂMETROS OTIMIZADOS ==========
+try:
+    generation_config = {
+        "temperature": 0.4,  # Reduzido para respostas mais focadas
+        "top_p": 0.95,
+        "top_k": 40,
+        "max_output_tokens": MAX_OUTPUT_TOKENS,
+    }
+    model = genai.GenerativeModel(
+        "gemini-2.0-flash-exp",  # Modelo mais rápido e eficiente
+        generation_config=generation_config
+    )
+except Exception:
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+    except:
+        model = genai.GenerativeModel("gemini-pro")
 
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
@@ -575,6 +656,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
     if not dataframes:
         return f"Nenhuma planilha foi carregada ainda.\n\nPergunta: {question}"
   
+    # Estratégia inteligente: resumo estatístico + amostra
     summary_data = ""
     detailed_data = ""
     total_rows = 0
@@ -583,16 +665,22 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
         if isinstance(df, dict):
             for sheet_name, sheet_df in df.items():
                 total_rows += len(sheet_df)
+                
+                # Adicionar resumo estatístico
                 summary_data += f"\n--- Resumo: {sheet_name} ({len(sheet_df)} linhas, {len(sheet_df.columns)} colunas) ---\n"
                 summary_data += f"Colunas: {', '.join(sheet_df.columns.tolist())}\n"
+                
+                # Estatísticas básicas para colunas numéricas
                 numeric_cols = sheet_df.select_dtypes(include=['number']).columns.tolist()
                 if numeric_cols:
                     summary_data += f"Colunas numéricas: {', '.join(numeric_cols)}\n"
-                    for col in numeric_cols[:5]:
+                    for col in numeric_cols[:5]:  # Limitar a 5 colunas
                         try:
                             summary_data += f"  {col}: min={sheet_df[col].min()}, max={sheet_df[col].max()}, média={sheet_df[col].mean():.2f}\n"
                         except:
                             pass
+                
+                # Adicionar amostra de dados
                 if len(sheet_df) <= sample_size:
                     detailed_data += f"\n--- Dados completos: {sheet_name} ---\n"
                     detailed_data += sheet_df.to_string(index=False, max_rows=sample_size)
@@ -602,16 +690,22 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 detailed_data += "\n"
         else:
             total_rows += len(df)
+            
+            # Adicionar resumo estatístico
             summary_data += f"\n--- Resumo: {filename} ({len(df)} linhas, {len(df.columns)} colunas) ---\n"
             summary_data += f"Colunas: {', '.join(df.columns.tolist())}\n"
+            
+            # Estatísticas básicas para colunas numéricas
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             if numeric_cols:
                 summary_data += f"Colunas numéricas: {', '.join(numeric_cols)}\n"
-                for col in numeric_cols[:5]:
+                for col in numeric_cols[:5]:  # Limitar a 5 colunas
                     try:
                         summary_data += f"  {col}: min={df[col].min()}, max={df[col].max()}, média={df[col].mean():.2f}\n"
                     except:
                         pass
+            
+            # Adicionar amostra de dados
             if len(df) <= sample_size:
                 detailed_data += f"\n--- Dados completos: {filename} ---\n"
                 detailed_data += df.to_string(index=False, max_rows=sample_size)
@@ -620,6 +714,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 detailed_data += df.head(sample_size).to_string(index=False)
             detailed_data += "\n"
   
+    # Prompt otimizado
     prompt = f"""Você é um analista de dados especializado em análise de planilhas.
 
 RESUMO DOS DADOS DISPONÍVEIS (Total: {total_rows} linhas):
@@ -646,91 +741,60 @@ Responda de forma direta e completa:"""
     return prompt
 
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
-    """Chamada síncrona ao modelo com rotação de chaves API"""
-    max_attempts = len(GEMINI_API_KEYS)
-    last_error = None
-    
-    for attempt in range(max_attempts):
-        # Obter próxima chave disponível
-        api_key, key_index = get_next_available_api_key()
-        
-        # Verificar rate limit
-        if not check_rate_limit(key_index):
-            time.sleep(3)  # Aguardar se necessário
-        
+    """Chamada síncrona ao modelo com tratamento de erros"""
+    if model is None:
+        raise RuntimeError("Modelo não configurado.")
+  
+    try:
+        resp = model.generate_content(
+            prompt,
+            generation_config={
+                "max_output_tokens": max_output_tokens,
+                "temperature": 0.4,
+            }
+        )
+        return getattr(resp, "text", str(resp))
+    except Exception as e:
+        # Se falhar com o modelo atual, tentar com parâmetros mais simples
         try:
-            # Reconfigurar Gemini com a nova chave
-            genai.configure(api_key=api_key)
-            
-            # Tentar criar o modelo
-            try:
-                model = genai.GenerativeModel(
-                    "gemini-2.0-flash-exp",
-                    generation_config={
-                        "temperature": 0.4,
-                        "top_p": 0.95,
-                        "top_k": 40,
-                        "max_output_tokens": max_output_tokens,
-                    }
-                )
-            except:
-                try:
-                    model = genai.GenerativeModel("gemini-1.5-flash")
-                except:
-                    model = genai.GenerativeModel("gemini-pro")
-            
-            # Fazer a chamada
-            resp = model.generate_content(
-                prompt,
-                generation_config={
-                    "max_output_tokens": max_output_tokens,
-                    "temperature": 0.4,
-                }
-            )
-            
-            # Se chegou aqui, sucesso! Resetar falhas desta chave
-            st.session_state.api_key_failures[key_index] = 0
+            resp = model.generate_content(prompt)
             return getattr(resp, "text", str(resp))
-            
-        except Exception as e:
-            error_str = str(e).lower()
-            last_error = e
-            
-            # Se for erro de quota/limite, marcar chave como falha e tentar próxima
-            if any(x in error_str for x in ["429", "quota", "resource_exhausted", "rate limit"]):
-                mark_api_key_failed(key_index)
-                
-                # Se não há mais chaves para tentar, retornar erro
-                if attempt >= max_attempts - 1:
-                    raise Exception("❌ Todas as chaves API atingiram o limite. Aguarde alguns minutos e tente novamente.")
-                
-                # Tentar próxima chave
-                continue
-            else:
-                # Para outros erros, tentar imediatamente com fallback
-                try:
-                    resp = model.generate_content(prompt)
-                    return getattr(resp, "text", str(resp))
-                except:
-                    raise e
-    
-    # Se todas as tentativas falharam
-    raise last_error if last_error else Exception("Erro desconhecido")
+        except:
+            raise e
 
 def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
-    """Chama modelo com timeout - APENAS 1 TENTATIVA"""
-    with ThreadPoolExecutor(max_workers=1) as ex:
-        future = ex.submit(_call_model_sync, prompt)
-        try:
-            result = future.result(timeout=timeout)
-            return result
-        except TimeoutError as te:
-            future.cancel()
-            raise TimeoutError("⏱️ A análise está demorando mais que o esperado. Por favor, tente reformular sua pergunta de forma mais específica.")
-        except Exception as e:
-            if "429" in str(e) or "quota" in str(e).lower() or "resource_exhausted" in str(e).lower():
-                raise Exception("❌ Limite de requisições da API Gemini atingido. Aguarde alguns minutos e tente novamente.")
-            raise e
+    """Chama modelo com timeout e retry otimizado"""
+    last_exc = None
+    
+    for attempt in range(1, MODEL_RETRIES + 1):
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(_call_model_sync, prompt)
+            try:
+                result = future.result(timeout=timeout)
+                return result
+            except TimeoutError as te:
+                future.cancel()
+                last_exc = te
+                # Aumentar timeout progressivamente a cada tentativa
+                timeout = timeout * 1.5
+            except Exception as e:
+                last_exc = e
+                # Se for erro de API, tentar novamente após backoff
+                if "429" in str(e) or "quota" in str(e).lower():
+                    time.sleep(RETRY_BACKOFF ** attempt)
+                else:
+                    # Para outros erros, falhar imediatamente
+                    break
+        
+        # Backoff exponencial entre tentativas
+        if attempt < MODEL_RETRIES:
+            time.sleep(RETRY_BACKOFF ** (attempt - 1))
+    
+    # Mensagem de erro mais informativa
+    if isinstance(last_exc, TimeoutError):
+        raise TimeoutError(f"A análise está demorando mais que o esperado. Por favor, tente reformular sua pergunta de forma mais específica.")
+    else:
+        raise last_exc
 
 # ========== HEADER ==========
 st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', unsafe_allow_html=True)
@@ -738,27 +802,8 @@ st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', un
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.markdown("### 📂 Gerenciar Dados")
-    
-    # Mostrar status das chaves API
-    st.markdown("---")
-    st.markdown("### 🔑 Status das APIs")
-    st.success(f"✅ {len(GEMINI_API_KEYS)} chave(s) Gemini configurada(s)")
-    
-    # Mostrar qual chave está ativa
-    active_key_num = st.session_state.current_api_key_index + 1
-    st.info(f"🔄 Usando chave #{active_key_num}")
-    
-    # Mostrar falhas (se houver)
-    total_failures = sum(st.session_state.api_key_failures.values())
-    if total_failures > 0:
-        st.warning(f"⚠️ {total_failures} falha(s) registrada(s)")
-        if st.button("🔄 Resetar Contadores", use_container_width=True):
-            st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
-            st.success("✅ Contadores resetados!")
-            st.rerun()
-    
-    st.markdown("---")
   
+    # Status do Google Sheets
     if GOOGLE_SHEETS_ENABLED:
         st.success("✅ Google Sheets conectado!")
         if st.button("🔄 Recarregar Google Sheets", use_container_width=True):
@@ -799,16 +844,18 @@ with st.sidebar:
                         st.error(f"❌ {file.name}: {str(e)}")
             st.rerun()
   
+    # Mostrar dados carregados
     if st.session_state.dataframes:
         st.markdown("---")
         st.markdown("### ✅ Dados Disponíveis")
         total_rows = 0
         for filename, df in st.session_state.dataframes.items():
             rows = len(df)
+            # Identificar origem usando a nova função
             if is_google_sheets_data(filename):
-                badge = "☁️"
+                badge = "☁️" # Google Sheets
             else:
-                badge = "📄"
+                badge = "📄" # Upload manual
             col1, col2 = st.columns([5, 1])
             with col1:
                 st.markdown(f"{badge} **{filename}**<br><small>{rows} linhas</small>", unsafe_allow_html=True)
@@ -823,12 +870,14 @@ with st.sidebar:
       
         st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
   
+    # Verificar se existem planilhas manuais usando a nova função
     has_manual_sheets = any(
         not is_google_sheets_data(filename) for filename in st.session_state.dataframes.keys()
     )
   
     if has_manual_sheets:
         if st.button("🗑️ Limpar Planilhas Manuais", use_container_width=True):
+            # Manter apenas planilhas do Google Sheets usando a nova função
             google_sheets_data = {
                 k: v for k, v in st.session_state.dataframes.items() if is_google_sheets_data(k)
             }
@@ -839,12 +888,15 @@ with st.sidebar:
 
 # ========== FUNÇÃO PARA EXIBIR CHAT ==========
 def render_chat_history():
-    """Renderiza o histórico do chat"""
-    for chat in st.session_state.chat_history:
+    """Renderiza o histórico do chat sem duplicação"""
+    for i, chat in enumerate(st.session_state.chat_history):
+        # Mensagem do usuário
         st.markdown(
             f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
             unsafe_allow_html=True
         )
+       
+        # Mensagem do bot
         st.markdown(
             f'<div class="chat-message bot-message"><b>{TABLE_ICON_SVG} InsightTab:</b><br>{chat["answer"]}</div>',
             unsafe_allow_html=True
@@ -855,14 +907,17 @@ def render_chat_history():
 if st.session_state.dataframes:
     st.markdown('<div class="panel">', unsafe_allow_html=True)
   
+    # Renderizar histórico do chat (SEM DUPLICAÇÃO)
     render_chat_history()
    
+    # Mostrar mensagem de processamento se estiver processando
     if st.session_state.processing:
         st.markdown(
-            '<div class="processing-message"><b>🤖 Analisando dados... Por favor, aguarde.</b></div>',
+            '<div class="processing-message"><b>🤖 Analisando dados... Isso pode levar até 3 minutos para perguntas complexas.</b></div>',
             unsafe_allow_html=True
         )
   
+    # Input
     with st.form(key="chat_form", clear_on_submit=True):
         user_question = st.text_input(
             "💭 Faça sua pergunta:",
@@ -874,56 +929,51 @@ if st.session_state.dataframes:
         with col2:
             submit = st.form_submit_button("📤 Enviar", use_container_width=True)
   
-    # CRÍTICO: DEBOUNCING E PREVENÇÃO DE DUPLICAÇÃO
     if submit and user_question and not st.session_state.processing:
-        current_time = time.time()
-        question_hash = generate_question_hash(user_question)
-        
-        # Verificar debouncing (mínimo 2 segundos entre envios)
-        if current_time - st.session_state.last_submission_time < 2:
-            st.warning("⚠️ Aguarde um momento antes de enviar outra pergunta.")
-        # Verificar se pergunta já foi processada
-        elif question_hash in st.session_state.processed_questions:
-            st.info("ℹ️ Esta pergunta já foi respondida. Veja o histórico acima.")
-        else:
-            # Marcar como processando
+        # Verificar se não é a mesma pergunta (evitar duplicação)
+        if user_question != st.session_state.last_question:
             st.session_state.processing = True
-            st.session_state.last_submission_time = current_time
-            st.session_state.processed_questions.add(question_hash)
-            
-            # Construir prompt
-            prompt = build_prompt_with_data(user_question, st.session_state.dataframes)
-            
-            # Chamar modelo
+            st.session_state.last_question = user_question
+           
+            # Adicionar pergunta ao histórico
+            st.session_state.chat_history.append({
+                "question": user_question,
+                "answer": ""
+            })
+           
+            # Recarregar para mostrar mensagem de processamento
+            st.rerun()
+  
+    # Processar pergunta se estiver em modo de processamento
+    if st.session_state.processing and st.session_state.chat_history:
+        last_chat = st.session_state.chat_history[-1]
+        if last_chat["answer"] == "": # Ainda não processado
+            prompt = build_prompt_with_data(last_chat["question"], st.session_state.dataframes)
             try:
                 answer = call_model_with_timeout(prompt)
             except TimeoutError as e:
-                answer = str(e)
+                answer = f"⏱️ {str(e)}"
             except Exception as e:
                 error_msg = str(e)
-                if "429" in error_msg or "quota" in error_msg.lower() or "resource_exhausted" in error_msg.lower():
-                    answer = "❌ Limite de requisições da API Gemini atingido. Aguarde alguns minutos antes de fazer outra pergunta."
+                if "quota" in error_msg.lower() or "429" in error_msg:
+                    answer = "❌ Limite de requisições atingido. Por favor, aguarde alguns segundos e tente novamente."
                 else:
                     answer = f"❌ Erro ao processar: {error_msg[:200]}"
-            
-            # Adicionar ao histórico
-            st.session_state.chat_history.append({
-                "question": user_question,
-                "answer": answer
-            })
-            
-            # Finalizar processamento
+          
+            # Atualizar resposta
+            st.session_state.chat_history[-1]["answer"] = answer
             st.session_state.processing = False
             st.rerun()
   
     if st.button("🧹 Limpar Conversa"):
         st.session_state.chat_history = []
-        st.session_state.processed_questions = set()
+        st.session_state.last_question = None
         st.session_state.processing = False
         st.rerun()
   
     st.markdown('</div>', unsafe_allow_html=True)
   
+    # Stats
     st.markdown("---")
     total_files = len(st.session_state.dataframes)
     total_rows = sum(len(df) for df in st.session_state.dataframes.values())
@@ -935,10 +985,13 @@ if st.session_state.dataframes:
     with col3:
         st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{len(st.session_state.chat_history)}</h2><p style="margin:0;">Perguntas</p></div>', unsafe_allow_html=True)
 else:
+    # Tela inicial (sem dados)
     st.markdown('<div class="panel">', unsafe_allow_html=True)
   
+    # Renderizar histórico do chat (SEM DUPLICAÇÃO)
     render_chat_history()
    
+    # Mostrar mensagem de processamento se estiver processando
     if st.session_state.processing:
         st.markdown(
             '<div class="processing-message"><b>🤖 Analisando sua pergunta...</b></div>',
@@ -957,38 +1010,41 @@ else:
             submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
   
     if submit_btn and user_question and not st.session_state.processing:
-        current_time = time.time()
-        question_hash = generate_question_hash(user_question)
-        
-        if current_time - st.session_state.last_submission_time < 2:
-            st.warning("⚠️ Aguarde um momento antes de enviar outra pergunta.")
-        elif question_hash in st.session_state.processed_questions:
-            st.info("ℹ️ Esta pergunta já foi respondida. Veja o histórico acima.")
-        else:
+        # Verificar se não é a mesma pergunta (evitar duplicação)
+        if user_question != st.session_state.last_question:
             st.session_state.processing = True
-            st.session_state.last_submission_time = current_time
-            st.session_state.processed_questions.add(question_hash)
-            
-            prompt = build_prompt_with_data(user_question, None)
+            st.session_state.last_question = user_question
+           
+            # Adicionar pergunta ao histórico
+            st.session_state.chat_history.append({
+                "question": user_question,
+                "answer": ""
+            })
+           
+            # Recarregar para mostrar mensagem de processamento
+            st.rerun()
+  
+    # Processar pergunta se estiver em modo de processamento
+    if st.session_state.processing and st.session_state.chat_history:
+        last_chat = st.session_state.chat_history[-1]
+        if last_chat["answer"] == "": # Ainda não processado
+            prompt = build_prompt_with_data(last_chat["question"], None)
             try:
                 answer = call_model_with_timeout(prompt, timeout=60)
             except TimeoutError:
-                answer = "⏱️ Tempo limite atingido. Tente novamente."
+                answer = "⏱️ Tempo limite atingido (60s). Tente novamente."
             except Exception as e:
                 answer = f"❌ Erro: {str(e)[:200]}"
-            
-            st.session_state.chat_history.append({
-                "question": user_question,
-                "answer": answer
-            })
-            
+          
+            # Atualizar resposta
+            st.session_state.chat_history[-1]["answer"] = answer
             st.session_state.processing = False
             st.rerun()
   
     if st.session_state.chat_history:
         if st.button("🧹 Limpar Conversa"):
             st.session_state.chat_history = []
-            st.session_state.processed_questions = set()
+            st.session_state.last_question = None
             st.session_state.processing = False
             st.rerun()
   
@@ -996,6 +1052,7 @@ else:
   
     st.markdown("---")
   
+    # Mensagem de boas-vindas
     st.markdown(
         """
         <div class="panel" style="text-align:center; padding: 60px 20px;">
