@@ -9,15 +9,12 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from google.oauth2.service_account import Credentials
 import time
 import warnings
-from google.generativeai.errors import APIError # Importação adicionada
 warnings.filterwarnings('ignore')
-
 # ═══════════════════════════════════════════════════════════════
 # 🔑 CONFIGURAÇÃO DAS APIs
 # ═══════════════════════════════════════════════════════════════
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GOOGLE_SHEETS_CREDENTIALS = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
-
 # IDs das planilhas no Google Sheets
 SHEET_IDS = {
     "Janeiro 2024": os.getenv('GOOGLE_SHEET_ID_JANEIRO'),
@@ -33,25 +30,20 @@ SHEET_IDS = {
     "Novembro 2024": os.getenv('GOOGLE_SHEET_ID_NOVEMBRO'),
     "Dezembro 2024": os.getenv('GOOGLE_SHEET_ID_DEZEMBRO'),
 }
-
 # Lista de nomes das planilhas do Google Sheets (para identificação)
 GOOGLE_SHEETS_NAMES = list(SHEET_IDS.keys())
-
 # Validar API Keys
 if not GEMINI_API_KEY:
     st.error("❌ API Key GEMINI_API_KEY não encontrada!")
     st.error("👉 Render Dashboard > Environment > Adicione: GEMINI_API_KEY = sua_chave")
     st.stop()
-
 if not GOOGLE_SHEETS_CREDENTIALS:
     st.warning("⚠️ Google Sheets não configurado. Modo upload manual ativado.")
     GOOGLE_SHEETS_ENABLED = False
 else:
     GOOGLE_SHEETS_ENABLED = True
-
 # Configurar Gemini
 genai.configure(api_key=GEMINI_API_KEY)
-
 # ═══════════════════════════════════════════════════════════════
 # 📊 FUNÇÃO PARA CARREGAR GOOGLE SHEETS
 # ═══════════════════════════════════════════════════════════════
@@ -60,7 +52,7 @@ def carregar_google_sheets():
     """Carrega dados das planilhas do Google Sheets"""
     if not GOOGLE_SHEETS_ENABLED:
         return {}
-    
+ 
     try:
         creds_dict = json.loads(GOOGLE_SHEETS_CREDENTIALS)
         scopes = [
@@ -70,7 +62,7 @@ def carregar_google_sheets():
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(credentials)
         dataframes = {}
-        
+     
         for nome, sheet_id in SHEET_IDS.items():
             if sheet_id:
                 try:
@@ -97,23 +89,20 @@ def carregar_google_sheets():
     except Exception as e:
         st.error(f"❌ Erro ao conectar Google Sheets: {str(e)}")
         return {}
-
 # ═══════════════════════════════════════════════════════════════
 # ⚙️ CONFIGURAÇÕES OTIMIZADAS
 # ═══════════════════════════════════════════════════════════════
-MODEL_TIMEOUT = 180  # Aumentado para 3 minutos
-MODEL_RETRIES = 5  # Mais tentativas para resolver limite de requisição (SOLUÇÃO)
-RETRY_BACKOFF = 2.0  # Aumentar o backoff exponencial (SOLUÇÃO)
-SAMPLE_SIZE = 2000  # Aumentado para 2000 linhas
-MAX_OUTPUT_TOKENS = 2048  # Dobrado para respostas mais completas
-
+MODEL_TIMEOUT = 180 # Aumentado para 3 minutos
+MODEL_RETRIES = 3 # Mais tentativas
+RETRY_BACKOFF = 1.5
+SAMPLE_SIZE = 1000 # Reduzido para 1000 linhas para otimizar uso de tokens e evitar limites de quota
+MAX_OUTPUT_TOKENS = 2048 # Dobrado para respostas mais completas
 st.set_page_config(
     page_title="InsightTab - Analista Inteligente",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
 # ========== ESTADO INICIAL ==========
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -130,12 +119,10 @@ if "uploaded_file_keys" not in st.session_state:
     st.session_state.uploaded_file_keys = []
 if "last_question" not in st.session_state:
     st.session_state.last_question = None
-
 # ========== CSS MODO ESCURO FIXO ==========
 st.markdown(
     """
     <style>
-    /* ... (O CSS fornecido no seu código está aqui) ... */
     /* Forçar modo escuro global */
     :root {
         --app-bg: #0b1116;
@@ -210,7 +197,7 @@ st.markdown(
     [data-testid="stSidebar"][aria-expanded="true"] ~ div .sidebar-toggle-btn {
         display: none !important;
     }
-    
+ 
     /* Mostrar botão customizado quando sidebar está fechada */
     [data-testid="stSidebar"][aria-expanded="false"] ~ div .sidebar-toggle-btn {
         display: flex !important;
@@ -224,7 +211,7 @@ st.markdown(
         stroke: white !important;
     }
     /* Ícone do botão hamburguer - EXTERNO (quando sidebar está fechada) */
-    [data-testid="collapsedControl"] {
+   [data-testid="collapsedControl"] {
     background: rgba(255, 255, 255, 0.1) !important;
     border: 1px solid rgba(255, 255, 255, 0.2) !important;
     border-radius: 10px !important;
@@ -334,7 +321,7 @@ st.markdown(
     .chat-message, .chat-message * {
         color: var(--text-color) !important;
     }
-    
+  
     /* ÍCONE DE PLANILHA NO BOT */
     .bot-icon {
         display: inline-block;
@@ -345,7 +332,7 @@ st.markdown(
         position: relative;
         top: -2px;
     }
-    
+  
     /* Cor do elemento ID/Nome (código inline) */
     .chat-message code {
         color: var(--accent) !important;
@@ -355,7 +342,7 @@ st.markdown(
         font-family: inherit !important;
         font-size: 0.9em;
     }
-    
+  
     /* MENSAGEM DE PROCESSAMENTO */
     .processing-message {
         padding: 15px;
@@ -366,12 +353,12 @@ st.markdown(
         color: var(--text-color) !important;
         animation: pulse 1.5s ease-in-out infinite;
     }
-    
+  
     @keyframes pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.6; }
     }
-    
+  
     /* Inputs e formulários */
     .stTextInput>div>div>input, .stTextArea>div>div>textarea {
         background-color: var(--card-bg) !important;
@@ -561,10 +548,10 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 # Ícone de planilha com fundo roxo-azulado (quadrado)
 TABLE_ICON_SVG = """
 <svg class="bot-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Fundo roxo-azulado com bordas arredondadas -->
     <rect x="2" y="2" width="20" height="20" rx="3" fill="url(#gradient)" />
     <defs>
         <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -572,8 +559,10 @@ TABLE_ICON_SVG = """
             <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
         </linearGradient>
     </defs>
+    <!-- Ícone de planilha branco -->
     <path d="M7 6 L7 18 L14 18 L17 15 L17 6 Z" fill="white" stroke="white" stroke-width="0.3"/>
     <path d="M14 6 L14 15 L17 15" fill="none" stroke="white" stroke-width="0.3"/>
+    <!-- Grade da planilha -->
     <line x1="8" y1="9" x2="13" y2="9" stroke="#667eea" stroke-width="0.4"/>
     <line x1="8" y1="11" x2="13" y2="11" stroke="#667eea" stroke-width="0.4"/>
     <line x1="8" y1="13" x2="13" y2="13" stroke="#667eea" stroke-width="0.4"/>
@@ -582,42 +571,40 @@ TABLE_ICON_SVG = """
     <line x1="11.5" y1="7.5" x2="11.5" y2="16" stroke="#667eea" stroke-width="0.4"/>
 </svg>
 """
-
 # ========== CONFIGURAR GEMINI COM PARÂMETROS OTIMIZADOS ==========
 try:
     generation_config = {
-        "temperature": 0.4,  # Reduzido para respostas mais focadas
+        "temperature": 0.4, # Reduzido para respostas mais focadas
         "top_p": 0.95,
         "top_k": 40,
         "max_output_tokens": MAX_OUTPUT_TOKENS,
     }
     model = genai.GenerativeModel(
-        "gemini-2.0-flash-exp",  # Modelo mais rápido e eficiente
+        "gemini-2.5-flash", # Alterado para modelo estável e não experimental para evitar problemas de quota em modelos preview
         generation_config=generation_config
     )
 except Exception:
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-pro")
     except:
-        model = genai.GenerativeModel("gemini-pro")
-
+        model = genai.GenerativeModel("gemini-1.5-flash")
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
     """Lê arquivo Excel ou CSV e retorna DataFrame"""
     if uploaded_file is None:
         raise ValueError("Nenhum arquivo fornecido")
-    
+ 
     try:
         uploaded_file.seek(0)
         content = uploaded_file.getvalue()
         bio = BytesIO(content)
         name = uploaded_file.name.lower()
-        
+     
         if name.endswith(".csv"):
             df = pd.read_csv(bio)
             bio.close()
             return df
-        
+     
         try:
             df = pd.read_excel(bio, engine="openpyxl")
             bio.close()
@@ -642,43 +629,41 @@ def read_uploaded_file_to_df(uploaded_file):
                 return df
     except Exception as e:
         raise Exception(f"Erro ao ler arquivo: {str(e)}")
-
 def is_google_sheets_data(filename):
     """Verifica se uma planilha veio do Google Sheets"""
     for sheet_name in GOOGLE_SHEETS_NAMES:
         if filename.startswith(sheet_name):
             return True
     return False
-
 def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
     """Constrói prompt otimizado com dados das planilhas"""
     if not dataframes:
         return f"Nenhuma planilha foi carregada ainda.\n\nPergunta: {question}"
-    
+ 
     # Estratégia inteligente: resumo estatístico + amostra
     summary_data = ""
     detailed_data = ""
     total_rows = 0
-    
+ 
     for filename, df in dataframes.items():
         if isinstance(df, dict):
             for sheet_name, sheet_df in df.items():
                 total_rows += len(sheet_df)
-                
+               
                 # Adicionar resumo estatístico
                 summary_data += f"\n--- Resumo: {sheet_name} ({len(sheet_df)} linhas, {len(sheet_df.columns)} colunas) ---\n"
                 summary_data += f"Colunas: {', '.join(sheet_df.columns.tolist())}\n"
-                
+               
                 # Estatísticas básicas para colunas numéricas
                 numeric_cols = sheet_df.select_dtypes(include=['number']).columns.tolist()
                 if numeric_cols:
                     summary_data += f"Colunas numéricas: {', '.join(numeric_cols)}\n"
-                    for col in numeric_cols[:5]:  # Limitar a 5 colunas
+                    for col in numeric_cols[:5]: # Limitar a 5 colunas
                         try:
-                            summary_data += f"  {col}: min={sheet_df[col].min()}, max={sheet_df[col].max()}, média={sheet_df[col].mean():.2f}\n"
+                            summary_data += f" {col}: min={sheet_df[col].min()}, max={sheet_df[col].max()}, média={sheet_df[col].mean():.2f}\n"
                         except:
                             pass
-                
+               
                 # Adicionar amostra de dados
                 if len(sheet_df) <= sample_size:
                     detailed_data += f"\n--- Dados completos: {sheet_name} ---\n"
@@ -689,21 +674,21 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 detailed_data += "\n"
         else:
             total_rows += len(df)
-            
+           
             # Adicionar resumo estatístico
             summary_data += f"\n--- Resumo: {filename} ({len(df)} linhas, {len(df.columns)} colunas) ---\n"
             summary_data += f"Colunas: {', '.join(df.columns.tolist())}\n"
-            
+           
             # Estatísticas básicas para colunas numéricas
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             if numeric_cols:
                 summary_data += f"Colunas numéricas: {', '.join(numeric_cols)}\n"
-                for col in numeric_cols[:5]:  # Limitar a 5 colunas
+                for col in numeric_cols[:5]: # Limitar a 5 colunas
                     try:
-                        summary_data += f"  {col}: min={df[col].min()}, max={df[col].max()}, média={df[col].mean():.2f}\n"
+                        summary_data += f" {col}: min={df[col].min()}, max={df[col].max()}, média={df[col].mean():.2f}\n"
                     except:
                         pass
-            
+           
             # Adicionar amostra de dados
             if len(df) <= sample_size:
                 detailed_data += f"\n--- Dados completos: {filename} ---\n"
@@ -712,18 +697,14 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 detailed_data += f"\n--- Amostra: {filename} (primeiras {sample_size} linhas) ---\n"
                 detailed_data += df.head(sample_size).to_string(index=False)
             detailed_data += "\n"
-    
+ 
     # Prompt otimizado
     prompt = f"""Você é um analista de dados especializado em análise de planilhas.
-
 RESUMO DOS DADOS DISPONÍVEIS (Total: {total_rows} linhas):
 {summary_data}
-
 AMOSTRA DOS DADOS:
 {detailed_data}
-
 PERGUNTA DO USUÁRIO: {question}
-
 INSTRUÇÕES IMPORTANTES:
 1. Você tem acesso a TODAS as {total_rows} linhas de dados através do resumo estatístico acima
 2. Use os dados estatísticos (min, max, média) para responder perguntas sobre totais e agregações
@@ -734,16 +715,14 @@ INSTRUÇÕES IMPORTANTES:
 7. Use APENAS código inline do Markdown (crases) para destacar: `nomes de produtos`, `IDs` e `valores monetários`
 8. Se os dados não forem suficientes para responder, informe isso claramente
 9. Para perguntas complexas, forneça análise detalhada com base nas estatísticas disponíveis
-
 Responda de forma direta e completa:"""
-    
+ 
     return prompt
-
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
     """Chamada síncrona ao modelo com tratamento de erros"""
     if model is None:
         raise RuntimeError("Modelo não configurado.")
-    
+ 
     try:
         resp = model.generate_content(
             prompt,
@@ -754,122 +733,51 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
         )
         return getattr(resp, "text", str(resp))
     except Exception as e:
-        # Tentar novamente com o modelo principal sem configs, em caso de erro.
+        # Se falhar com o modelo atual, tentar com parâmetros mais simples
         try:
-            model_fallback = genai.GenerativeModel("gemini-2.5-flash") 
-            resp = model_fallback.generate_content(prompt)
+            resp = model.generate_content(prompt)
             return getattr(resp, "text", str(resp))
         except:
             raise e
-
 def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
-    """Chama modelo com timeout e retry OTIMIZADO para rate limit (SOLUÇÃO)"""
+    """Chama modelo com timeout e retry otimizado"""
     last_exc = None
-    
+   
     for attempt in range(1, MODEL_RETRIES + 1):
         with ThreadPoolExecutor(max_workers=1) as ex:
             future = ex.submit(_call_model_sync, prompt)
             try:
                 result = future.result(timeout=timeout)
-                return result # Sucesso! Retorna o resultado.
-            
+                return result
             except TimeoutError as te:
                 future.cancel()
                 last_exc = te
+                # Aumentar timeout progressivamente a cada tentativa
                 timeout = timeout * 1.5
-            
-            except APIError as e: # Capturar erros de API do google.generativeai
-                error_message = str(e).lower()
-                last_exc = e
-                # Verificar erros que devem ser retentados (Rate Limit, Quota, Internal Errors)
-                if "429" in error_message or "quota" in error_message or "internal error" in error_message or "service unavailable" in error_message:
-                    # Espera exponencial antes da próxima tentativa
-                    time.sleep(RETRY_BACKOFF ** attempt)
-                    continue # Próxima tentativa no loop for
-                else:
-                    # Para outros erros API (ex: bad request, authentication), falhar imediatamente
-                    break
-            
             except Exception as e:
-                # Tratar outras exceções gerais se não forem capturadas por APIError (ex: conexão)
                 last_exc = e
-                error_message = str(e).lower()
-                if "connection" in error_message or "server" in error_message or "http" in error_message:
+                # Se for erro de API, tentar novamente após backoff
+                if "429" in str(e) or "quota" in str(e).lower():
                     time.sleep(RETRY_BACKOFF ** attempt)
-                    continue
                 else:
+                    # Para outros erros, falhar imediatamente
                     break
-    
-    # Se todas as tentativas falharem
+       
+        # Backoff exponencial entre tentativas
+        if attempt < MODEL_RETRIES:
+            time.sleep(RETRY_BACKOFF ** (attempt - 1))
+   
+    # Mensagem de erro mais informativa
     if isinstance(last_exc, TimeoutError):
-        raise TimeoutError(f"A análise está demorando mais que o esperado (Timeout após {MODEL_RETRIES} tentativas). Por favor, tente reformular sua pergunta de forma mais específica.")
-    elif last_exc:
-        raise last_exc
+        raise TimeoutError(f"A análise está demorando mais que o esperado. Por favor, tente reformular sua pergunta de forma mais específica.")
     else:
-        raise Exception("Erro desconhecido ao chamar o modelo.")
-
-# ═══════════════════════════════════════════════════════════════
-# 🧠 LÓGICA PRINCIPAL DO CHAT (COMPLETANDO O CÓDIGO)
-# ═══════════════════════════════════════════════════════════════
-
-def handle_submit(question):
-    """Lógica principal para processar a pergunta do usuário."""
-    if st.session_state.processing:
-        st.error("❌ Por favor, aguarde o processamento da pergunta anterior.")
-        return
-
-    st.session_state.processing = True
-    st.session_state.last_question = question
-    
-    # 1. Adicionar pergunta do usuário ao histórico
-    st.session_state.chat_history.append({"role": "user", "content": question})
-    
-    # Placeholder para mensagem de processamento
-    processing_message_placeholder = st.empty()
-    processing_message_placeholder.markdown('<div class="processing-message">📊 Analisando dados... Por favor, aguarde.</div>', unsafe_allow_html=True)
-    
-    try:
-        # 2. Construir Prompt Otimizado
-        prompt = build_prompt_with_data(question, st.session_state.dataframes)
-        
-        # 3. Chamar o Modelo com Timeout e Retry
-        with st.spinner("🧠 Gerando análise..."):
-            ai_response = call_model_with_timeout(prompt)
-            
-        # 4. Adicionar resposta ao histórico
-        st.session_state.chat_history.append({"role": "bot", "content": ai_response})
-        
-        processing_message_placeholder.empty()
-
-    except TimeoutError as te:
-        error_msg = f"❌ Erro de Timeout: {str(te)}"
-        st.session_state.chat_history.append({"role": "bot", "content": error_msg})
-        st.error(error_msg)
-    except APIError as e:
-        # Captura específica do erro de limite de requisições da foto
-        error_msg = f"❌ Erro da API Gemini: Limite de requisições atingido ou erro de servidor. Por favor, aguarde um momento e tente novamente. (Detalhe: {str(e)})"
-        st.session_state.chat_history.append({"role": "bot", "content": error_msg})
-        st.error(error_msg)
-    except Exception as e:
-        error_msg = f"❌ Ocorreu um erro inesperado: {str(e)}"
-        st.session_state.chat_history.append({"role": "bot", "content": error_msg})
-        st.error(error_msg)
-    finally:
-        st.session_state.processing = False
-        processing_message_placeholder.empty()
-        st.rerun() # Recarregar para mostrar histórico atualizado
-
-# ═══════════════════════════════════════════════════════════════
-# 🖥️ ESTRUTURA DA INTERFACE STREAMLIT
-# ═══════════════════════════════════════════════════════════════
-
+        raise last_exc
 # ========== HEADER ==========
 st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', unsafe_allow_html=True)
-
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.markdown("### 📂 Gerenciar Dados")
-    
+ 
     # Status do Google Sheets
     if GOOGLE_SHEETS_ENABLED:
         st.success("✅ Google Sheets conectado!")
@@ -879,10 +787,10 @@ with st.sidebar:
             st.rerun()
     else:
         st.info("ℹ️ Google Sheets não configurado. Use upload manual.")
-    
+ 
     st.markdown("---")
     st.markdown("### ➕ Upload Manual (Opcional)")
-    
+ 
     file_uploader_key = f"file_uploader_{len(st.session_state.uploaded_file_keys)}"
     uploaded_files = st.file_uploader(
         "Adicionar planilhas extras",
@@ -890,13 +798,13 @@ with st.sidebar:
         accept_multiple_files=True,
         key=file_uploader_key
     )
-    
+ 
     if uploaded_files:
         new_files = []
         for file in uploaded_files:
             if file.name not in st.session_state.dataframes:
                 new_files.append(file)
-        
+     
         if new_files:
             with st.spinner(f"📊 Carregando {len(new_files)} arquivo(s)..."):
                 for file in new_files:
@@ -910,7 +818,7 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"❌ {file.name}: {str(e)}")
             st.rerun()
-    
+ 
     # Mostrar dados carregados
     if st.session_state.dataframes:
         st.markdown("---")
@@ -918,11 +826,11 @@ with st.sidebar:
         total_rows = 0
         for filename, df in st.session_state.dataframes.items():
             rows = len(df)
-            # Identificar origem
+            # Identificar origem usando a nova função
             if is_google_sheets_data(filename):
-                badge = "☁️" 
+                badge = "☁️" # Google Sheets
             else:
-                badge = "📄" 
+                badge = "📄" # Upload manual
             col1, col2 = st.columns([5, 1])
             with col1:
                 st.markdown(f"{badge} **{filename}**<br><small>{rows} linhas</small>", unsafe_allow_html=True)
@@ -934,69 +842,189 @@ with st.sidebar:
                         st.success(f"✅ Planilha {filename} excluída!")
                         st.rerun()
             total_rows += rows
-        
-        st.markdown(f'<div style="margin-top: 10px; padding: 10px; background-color: rgba(102, 126, 234, 0.1); border-radius: 8px;"><small>Total de linhas para análise: <b>{total_rows:,}</b></small></div>', unsafe_allow_html=True)
-
-
-# ========== EXIBIR HISTÓRICO DE CHAT (COMPLETANDO O CÓDIGO) ==========
-for message in st.session_state.chat_history:
-    if message["role"] == "user":
-        st.markdown(
-            f"""
-            <div class="chat-message user-message">
-                👤 <b>Você:</b><br>{message["content"]}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f"""
-            <div class="chat-message bot-message">
-                {TABLE_ICON_SVG} <b>InsightTab:</b><br>{message["content"]}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-# ========== INPUT DE PERGUNTA (FIXO NA PARTE INFERIOR - COMPLETANDO O CÓDIGO) ==========
-if not st.session_state.dataframes:
-    st.warning("⚠️ Por favor, adicione planilhas via Google Sheets ou Upload Manual para começar a análise.")
-
-with st.form(key='chat_form', clear_on_submit=True):
-    example_text = "Ex: Qual produto vendeu mais? Qual região tem maior receita?"
-    
-    question = st.text_input(
-        "Sua Pergunta",
-        placeholder=example_text,
-        label_visibility="collapsed",
-        disabled=not st.session_state.dataframes or st.session_state.processing
+     
+        st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
+ 
+    # Verificar se existem planilhas manuais usando a nova função
+    has_manual_sheets = any(
+        not is_google_sheets_data(filename) for filename in st.session_state.dataframes.keys()
     )
-    
-    col_submit, col_clear = st.columns([1, 0.2])
-    
-    with col_submit:
-        submit_button = st.form_submit_button(
-            label="<span class='texto-branco'>Enviar</span>",
-            use_container_width=True,
-            disabled=not st.session_state.dataframes or st.session_state.processing,
+ 
+    if has_manual_sheets:
+        if st.button("🗑️ Limpar Planilhas Manuais", use_container_width=True):
+            # Manter apenas planilhas do Google Sheets usando a nova função
+            google_sheets_data = {
+                k: v for k, v in st.session_state.dataframes.items() if is_google_sheets_data(k)
+            }
+            st.session_state.dataframes = google_sheets_data
+            st.session_state.uploaded_file_keys.append(time.time())
+            st.success("✅ Planilhas manuais removidas!")
+            st.rerun()
+# ========== FUNÇÃO PARA EXIBIR CHAT ==========
+def render_chat_history():
+    """Renderiza o histórico do chat sem duplicação"""
+    for i, chat in enumerate(st.session_state.chat_history):
+        # Mensagem do usuário
+        st.markdown(
+            f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
+            unsafe_allow_html=True
         )
-
-# Após o submit
-if submit_button and question:
-    handle_submit(question)
-
-# Botão Limpar Conversa (fora do formulário)
-with st.container():
-    st.markdown('<div style="margin-top: 20px;">', unsafe_allow_html=True)
-    if st.button("🧹 Limpar Conversa", use_container_width=False, key="clear_conv_button", type="secondary"):
+      
+        # Mensagem do bot
+        st.markdown(
+            f'<div class="chat-message bot-message"><b>{TABLE_ICON_SVG} InsightTab:</b><br>{chat["answer"]}</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown("---")
+# ========== ÁREA PRINCIPAL - CHAT ==========
+if st.session_state.dataframes:
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+ 
+    # Renderizar histórico do chat (SEM DUPLICAÇÃO)
+    render_chat_history()
+  
+    # Mostrar mensagem de processamento se estiver processando
+    if st.session_state.processing:
+        st.markdown(
+            '<div class="processing-message"><b>🤖 Analisando dados... Isso pode levar até 3 minutos para perguntas complexas.</b></div>',
+            unsafe_allow_html=True
+        )
+ 
+    # Input
+    with st.form(key="chat_form", clear_on_submit=True):
+        user_question = st.text_input(
+            "💭 Faça sua pergunta:",
+            placeholder="Ex: Qual produto vendeu mais? Qual região tem maior receita?",
+            key="chat_input",
+            label_visibility="collapsed"
+        )
+        col1, col2 = st.columns([4, 1])
+        with col2:
+            submit = st.form_submit_button("📤 Enviar", use_container_width=True)
+ 
+    if submit and user_question and not st.session_state.processing:
+        # Verificar se não é a mesma pergunta (evitar duplicação)
+        if user_question != st.session_state.last_question:
+            st.session_state.processing = True
+            st.session_state.last_question = user_question
+          
+            # Adicionar pergunta ao histórico
+            st.session_state.chat_history.append({
+                "question": user_question,
+                "answer": ""
+            })
+          
+            # Recarregar para mostrar mensagem de processamento
+            st.rerun()
+ 
+    # Processar pergunta se estiver em modo de processamento
+    if st.session_state.processing and st.session_state.chat_history:
+        last_chat = st.session_state.chat_history[-1]
+        if last_chat["answer"] == "": # Ainda não processado
+            prompt = build_prompt_with_data(last_chat["question"], st.session_state.dataframes)
+            try:
+                answer = call_model_with_timeout(prompt)
+            except TimeoutError as e:
+                answer = f"⏱️ {str(e)}"
+            except Exception as e:
+                error_msg = str(e)
+                if "429" in error_msg or "quota" in error_msg.lower():
+                    answer = "❌ Limite de requisições atingido. Por favor, aguarde alguns segundos e tente novamente. Se persistir, verifique sua quota no console do Google AI ou use uma chave com billing ativado."
+                else:
+                    answer = f"❌ Erro ao processar: {error_msg[:200]}"
+         
+            # Atualizar resposta
+            st.session_state.chat_history[-1]["answer"] = answer
+            st.session_state.processing = False
+            st.rerun()
+ 
+    if st.button("🧹 Limpar Conversa"):
         st.session_state.chat_history = []
         st.session_state.last_question = None
+        st.session_state.processing = False
         st.rerun()
+ 
     st.markdown('</div>', unsafe_allow_html=True)
-
-     st.markdown("---")
-    
+ 
+    # Stats
+    st.markdown("---")
+    total_files = len(st.session_state.dataframes)
+    total_rows = sum(len(df) for df in st.session_state.dataframes.values())
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{total_files}</h2><p style="margin:0;">Tabelas</p></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{total_rows:,}</h2><p style="margin:0;">Linhas</p></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown(f'<div class="stat-box"><h2 style="margin:0;">{len(st.session_state.chat_history)}</h2><p style="margin:0;">Perguntas</p></div>', unsafe_allow_html=True)
+else:
+    # Tela inicial (sem dados)
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+ 
+    # Renderizar histórico do chat (SEM DUPLICAÇÃO)
+    render_chat_history()
+  
+    # Mostrar mensagem de processamento se estiver processando
+    if st.session_state.processing:
+        st.markdown(
+            '<div class="processing-message"><b>🤖 Analisando sua pergunta...</b></div>',
+            unsafe_allow_html=True
+        )
+ 
+    with st.form(key="nodata_form", clear_on_submit=True):
+        user_question = st.text_input(
+            "💭 Faça sua pergunta:",
+            placeholder="Ex: Como funciona este app? O que posso fazer aqui?",
+            key="input_question_no_data",
+            label_visibility="collapsed"
+        )
+        col_btn1, col_btn2 = st.columns([4, 1])
+        with col_btn2:
+            submit_btn = st.form_submit_button("📤 Enviar", use_container_width=True)
+ 
+    if submit_btn and user_question and not st.session_state.processing:
+        # Verificar se não é a mesma pergunta (evitar duplicação)
+        if user_question != st.session_state.last_question:
+            st.session_state.processing = True
+            st.session_state.last_question = user_question
+          
+            # Adicionar pergunta ao histórico
+            st.session_state.chat_history.append({
+                "question": user_question,
+                "answer": ""
+            })
+          
+            # Recarregar para mostrar mensagem de processamento
+            st.rerun()
+ 
+    # Processar pergunta se estiver em modo de processamento
+    if st.session_state.processing and st.session_state.chat_history:
+        last_chat = st.session_state.chat_history[-1]
+        if last_chat["answer"] == "": # Ainda não processado
+            prompt = build_prompt_with_data(last_chat["question"], None)
+            try:
+                answer = call_model_with_timeout(prompt, timeout=60)
+            except TimeoutError:
+                answer = "⏱️ Tempo limite atingido (60s). Tente novamente."
+            except Exception as e:
+                answer = f"❌ Erro: {str(e)[:200]}"
+         
+            # Atualizar resposta
+            st.session_state.chat_history[-1]["answer"] = answer
+            st.session_state.processing = False
+            st.rerun()
+ 
+    if st.session_state.chat_history:
+        if st.button("🧹 Limpar Conversa"):
+            st.session_state.chat_history = []
+            st.session_state.last_question = None
+            st.session_state.processing = False
+            st.rerun()
+ 
+    st.markdown('</div>', unsafe_allow_html=True)
+ 
+    st.markdown("---")
+ 
     # Mensagem de boas-vindas
     st.markdown(
         """
