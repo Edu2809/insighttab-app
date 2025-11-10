@@ -13,10 +13,22 @@ import hashlib
 warnings.filterwarnings('ignore')
 
 # ═══════════════════════════════════════════════════════════════
-# 🔑 CONFIGURAÇÃO DAS APIs
+# 🔑 CONFIGURAÇÃO DAS APIs COM ROTAÇÃO
 # ═══════════════════════════════════════════════════════════════
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GOOGLE_SHEETS_CREDENTIALS = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
+
+# Sistema de múltiplas chaves API (Rotação automática)
+GEMINI_API_KEYS = []
+for i in range(1, 11):  # Suporta até 10 chaves (GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc.)
+    key = os.getenv(f'GEMINI_API_KEY_{i}') or os.getenv(f'GEMINI_API_KEY{i}')
+    if key:
+        GEMINI_API_KEYS.append(key)
+
+# Fallback para chave única
+if not GEMINI_API_KEYS:
+    single_key = os.getenv('GEMINI_API_KEY')
+    if single_key:
+        GEMINI_API_KEYS.append(single_key)
 
 # IDs das planilhas no Google Sheets
 SHEET_IDS = {
@@ -37,9 +49,12 @@ SHEET_IDS = {
 GOOGLE_SHEETS_NAMES = list(SHEET_IDS.keys())
 
 # Validar API Keys
-if not GEMINI_API_KEY:
-    st.error("❌ API Key GEMINI_API_KEY não encontrada!")
-    st.error("👉 Render Dashboard > Environment > Adicione: GEMINI_API_KEY = sua_chave")
+if not GEMINI_API_KEYS:
+    st.error("❌ Nenhuma API Key do Gemini encontrada!")
+    st.error("👉 Render Dashboard > Environment > Adicione:")
+    st.error("   - GEMINI_API_KEY_1 = primeira_chave")
+    st.error("   - GEMINI_API_KEY_2 = segunda_chave (opcional)")
+    st.error("   - GEMINI_API_KEY_3 = terceira_chave (opcional)")
     st.stop()
 
 if not GOOGLE_SHEETS_CREDENTIALS:
@@ -48,8 +63,50 @@ if not GOOGLE_SHEETS_CREDENTIALS:
 else:
     GOOGLE_SHEETS_ENABLED = True
 
-# Configurar Gemini
-genai.configure(api_key=GEMINI_API_KEY)
+# Estado para controle de rotação de chaves
+if "current_api_key_index" not in st.session_state:
+    st.session_state.current_api_key_index = 0
+if "api_key_failures" not in st.session_state:
+    st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
+if "last_api_call_time" not in st.session_state:
+    st.session_state.last_api_call_time = {}
+
+def get_next_available_api_key():
+    """Retorna a próxima chave API disponível com menos falhas"""
+    # Ordenar chaves por número de falhas (menor primeiro)
+    sorted_keys = sorted(st.session_state.api_key_failures.items(), key=lambda x: x[1])
+    
+    # Tentar encontrar uma chave que não falhou recentemente
+    for key_index, failures in sorted_keys:
+        # Se a chave tem menos de 3 falhas, usar ela
+        if failures < 3:
+            st.session_state.current_api_key_index = key_index
+            return GEMINI_API_KEYS[key_index], key_index
+    
+    # Se todas falharam muito, resetar contadores e usar a primeira
+    st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
+    st.session_state.current_api_key_index = 0
+    return GEMINI_API_KEYS[0], 0
+
+def mark_api_key_failed(key_index):
+    """Marca uma chave como falha"""
+    st.session_state.api_key_failures[key_index] += 1
+
+def check_rate_limit(key_index):
+    """Verifica se passou tempo suficiente desde a última chamada"""
+    current_time = time.time()
+    last_call = st.session_state.last_api_call_time.get(key_index, 0)
+    
+    # Exigir 3 segundos entre chamadas da mesma chave
+    if current_time - last_call < 3:
+        return False
+    
+    st.session_state.last_api_call_time[key_index] = current_time
+    return True
+
+# Configurar Gemini com a primeira chave
+api_key, _ = get_next_available_api_key()
+genai.configure(api_key=api_key)
 
 # ═══════════════════════════════════════════════════════════════
 # 📊 FUNÇÃO PARA CARREGAR GOOGLE SHEETS
@@ -459,22 +516,8 @@ TABLE_ICON_SVG = """
 """
 
 # ========== CONFIGURAR GEMINI ==========
-try:
-    generation_config = {
-        "temperature": 0.4,
-        "top_p": 0.95,
-        "top_k": 40,
-        "max_output_tokens": MAX_OUTPUT_TOKENS,
-    }
-    model = genai.GenerativeModel(
-        "gemini-2.0-flash-exp",
-        generation_config=generation_config
-    )
-except Exception:
-    try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-    except:
-        model = genai.GenerativeModel("gemini-pro")
+# Remover configuração única - agora usa rotação dinâmica
+# A configuração é feita dentro de _call_model_sync()
 
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
@@ -601,25 +644,76 @@ Responda de forma direta e completa:"""
     return prompt
 
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
-    """Chamada síncrona ao modelo com tratamento de erros"""
-    if model is None:
-        raise RuntimeError("Modelo não configurado.")
-  
-    try:
-        resp = model.generate_content(
-            prompt,
-            generation_config={
-                "max_output_tokens": max_output_tokens,
-                "temperature": 0.4,
-            }
-        )
-        return getattr(resp, "text", str(resp))
-    except Exception as e:
+    """Chamada síncrona ao modelo com rotação de chaves API"""
+    max_attempts = len(GEMINI_API_KEYS)
+    last_error = None
+    
+    for attempt in range(max_attempts):
+        # Obter próxima chave disponível
+        api_key, key_index = get_next_available_api_key()
+        
+        # Verificar rate limit
+        if not check_rate_limit(key_index):
+            time.sleep(3)  # Aguardar se necessário
+        
         try:
-            resp = model.generate_content(prompt)
+            # Reconfigurar Gemini com a nova chave
+            genai.configure(api_key=api_key)
+            
+            # Tentar criar o modelo
+            try:
+                model = genai.GenerativeModel(
+                    "gemini-2.0-flash-exp",
+                    generation_config={
+                        "temperature": 0.4,
+                        "top_p": 0.95,
+                        "top_k": 40,
+                        "max_output_tokens": max_output_tokens,
+                    }
+                )
+            except:
+                try:
+                    model = genai.GenerativeModel("gemini-1.5-flash")
+                except:
+                    model = genai.GenerativeModel("gemini-pro")
+            
+            # Fazer a chamada
+            resp = model.generate_content(
+                prompt,
+                generation_config={
+                    "max_output_tokens": max_output_tokens,
+                    "temperature": 0.4,
+                }
+            )
+            
+            # Se chegou aqui, sucesso! Resetar falhas desta chave
+            st.session_state.api_key_failures[key_index] = 0
             return getattr(resp, "text", str(resp))
-        except:
-            raise e
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            last_error = e
+            
+            # Se for erro de quota/limite, marcar chave como falha e tentar próxima
+            if any(x in error_str for x in ["429", "quota", "resource_exhausted", "rate limit"]):
+                mark_api_key_failed(key_index)
+                
+                # Se não há mais chaves para tentar, retornar erro
+                if attempt >= max_attempts - 1:
+                    raise Exception("❌ Todas as chaves API atingiram o limite. Aguarde alguns minutos e tente novamente.")
+                
+                # Tentar próxima chave
+                continue
+            else:
+                # Para outros erros, tentar imediatamente com fallback
+                try:
+                    resp = model.generate_content(prompt)
+                    return getattr(resp, "text", str(resp))
+                except:
+                    raise e
+    
+    # Se todas as tentativas falharam
+    raise last_error if last_error else Exception("Erro desconhecido")
 
 def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
     """Chama modelo com timeout - APENAS 1 TENTATIVA"""
@@ -642,6 +736,26 @@ st.markdown('<h1 class="main-header">InsightTab - Analista Inteligente</h1>', un
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.markdown("### 📂 Gerenciar Dados")
+    
+    # Mostrar status das chaves API
+    st.markdown("---")
+    st.markdown("### 🔑 Status das APIs")
+    st.success(f"✅ {len(GEMINI_API_KEYS)} chave(s) Gemini configurada(s)")
+    
+    # Mostrar qual chave está ativa
+    active_key_num = st.session_state.current_api_key_index + 1
+    st.info(f"🔄 Usando chave #{active_key_num}")
+    
+    # Mostrar falhas (se houver)
+    total_failures = sum(st.session_state.api_key_failures.values())
+    if total_failures > 0:
+        st.warning(f"⚠️ {total_failures} falha(s) registrada(s)")
+        if st.button("🔄 Resetar Contadores", use_container_width=True):
+            st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
+            st.success("✅ Contadores resetados!")
+            st.rerun()
+    
+    st.markdown("---")
   
     if GOOGLE_SHEETS_ENABLED:
         st.success("✅ Google Sheets conectado!")
