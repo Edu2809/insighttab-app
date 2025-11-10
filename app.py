@@ -64,49 +64,8 @@ else:
     GOOGLE_SHEETS_ENABLED = True
 
 # Estado para controle de rotação de chaves
-if "current_api_key_index" not in st.session_state:
-    st.session_state.current_api_key_index = 0
-if "api_key_failures" not in st.session_state:
-    st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
-if "last_api_call_time" not in st.session_state:
-    st.session_state.last_api_call_time = {}
-
-def get_next_available_api_key():
-    """Retorna a próxima chave API disponível com menos falhas"""
-    # Ordenar chaves por número de falhas (menor primeiro)
-    sorted_keys = sorted(st.session_state.api_key_failures.items(), key=lambda x: x[1])
-    
-    # Tentar encontrar uma chave que não falhou recentemente
-    for key_index, failures in sorted_keys:
-        # Se a chave tem menos de 3 falhas, usar ela
-        if failures < 3:
-            st.session_state.current_api_key_index = key_index
-            return GEMINI_API_KEYS[key_index], key_index
-    
-    # Se todas falharam muito, resetar contadores e usar a primeira
-    st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
-    st.session_state.current_api_key_index = 0
-    return GEMINI_API_KEYS[0], 0
-
-def mark_api_key_failed(key_index):
-    """Marca uma chave como falha"""
-    st.session_state.api_key_failures[key_index] += 1
-
-def check_rate_limit(key_index):
-    """Verifica se passou tempo suficiente desde a última chamada"""
-    current_time = time.time()
-    last_call = st.session_state.last_api_call_time.get(key_index, 0)
-    
-    # Exigir 3 segundos entre chamadas da mesma chave
-    if current_time - last_call < 3:
-        return False
-    
-    st.session_state.last_api_call_time[key_index] = current_time
-    return True
-
-# Configurar Gemini com a primeira chave
-api_key, _ = get_next_available_api_key()
-genai.configure(api_key=api_key)
+# MOVIDO PARA DEPOIS DE set_page_config E ANTES DE USAR
+# (já está corrigido acima no código)
 
 # ═══════════════════════════════════════════════════════════════
 # 📊 FUNÇÃO PARA CARREGAR GOOGLE SHEETS
@@ -175,9 +134,27 @@ def generate_question_hash(question):
     """Gera hash único para cada pergunta"""
     return hashlib.md5(question.encode()).hexdigest()
 
-# ========== ESTADO INICIAL ==========
+# ========== ESTADO INICIAL - DEVE VIR ANTES DE QUALQUER USO ==========
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "processing" not in st.session_state:
+    st.session_state.processing = False
+if "uploaded_file_keys" not in st.session_state:
+    st.session_state.uploaded_file_keys = []
+if "processed_questions" not in st.session_state:
+    st.session_state.processed_questions = set()
+if "last_submission_time" not in st.session_state:
+    st.session_state.last_submission_time = 0
+
+# INICIALIZAR VARIÁVEIS DE CONTROLE DE API - CRÍTICO!
+if "current_api_key_index" not in st.session_state:
+    st.session_state.current_api_key_index = 0
+if "api_key_failures" not in st.session_state:
+    st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
+if "last_api_call_time" not in st.session_state:
+    st.session_state.last_api_call_time = {}
+
+# Carregar dataframes após inicializar session_state
 if "dataframes" not in st.session_state:
     loading_placeholder = st.empty()
     loading_placeholder.markdown('<div style="text-align: center; color: white; font-size: 24px;">Carregando o site...</div>', unsafe_allow_html=True)
@@ -185,14 +162,39 @@ if "dataframes" not in st.session_state:
     if st.session_state.dataframes:
         st.success(f"✅ {len(st.session_state.dataframes)} planilha(s) carregada(s) do Google Sheets!")
     loading_placeholder.empty()
-if "processing" not in st.session_state:
-    st.session_state.processing = False
-if "uploaded_file_keys" not in st.session_state:
-    st.session_state.uploaded_file_keys = []
-if "processed_questions" not in st.session_state:  # NOVO: RASTREAR PERGUNTAS PROCESSADAS
-    st.session_state.processed_questions = set()
-if "last_submission_time" not in st.session_state:  # NOVO: DEBOUNCING
-    st.session_state.last_submission_time = 0
+
+def get_next_available_api_key():
+    """Retorna a próxima chave API disponível com menos falhas"""
+    # Ordenar chaves por número de falhas (menor primeiro)
+    sorted_keys = sorted(st.session_state.api_key_failures.items(), key=lambda x: x[1])
+    
+    # Tentar encontrar uma chave que não falhou recentemente
+    for key_index, failures in sorted_keys:
+        # Se a chave tem menos de 3 falhas, usar ela
+        if failures < 3:
+            st.session_state.current_api_key_index = key_index
+            return GEMINI_API_KEYS[key_index], key_index
+    
+    # Se todas falharam muito, resetar contadores e usar a primeira
+    st.session_state.api_key_failures = {i: 0 for i in range(len(GEMINI_API_KEYS))}
+    st.session_state.current_api_key_index = 0
+    return GEMINI_API_KEYS[0], 0
+
+def mark_api_key_failed(key_index):
+    """Marca uma chave como falha"""
+    st.session_state.api_key_failures[key_index] += 1
+
+def check_rate_limit(key_index):
+    """Verifica se passou tempo suficiente desde a última chamada"""
+    current_time = time.time()
+    last_call = st.session_state.last_api_call_time.get(key_index, 0)
+    
+    # Exigir 3 segundos entre chamadas da mesma chave
+    if current_time - last_call < 3:
+        return False
+    
+    st.session_state.last_api_call_time[key_index] = current_time
+    return True
 
 # ========== CSS (MANTIDO IGUAL) ==========
 st.markdown(
