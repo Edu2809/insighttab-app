@@ -573,14 +573,14 @@ try:
         "max_output_tokens": MAX_OUTPUT_TOKENS,
     }
     model = genai.GenerativeModel(
-        "gemini-1.5-flash-latest", # Corrigido para modelo válido e com contexto longo para lidar com dados completos
+        "gemini-2.5.flash", # Corrigido para modelo válido e com contexto longo para lidar com dados completos
         generation_config=generation_config
     )
 except Exception:
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
     except:
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        model = genai.GenerativeModel("gemini-2.5-flash")
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
     """Lê arquivo Excel ou CSV e retorna DataFrame"""
