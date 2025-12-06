@@ -694,3 +694,32 @@ vendas = df.groupby('Produto')['Quantidade'].sum()
 max_produto = vendas.idxmax()
 max_quant = vendas.max()
 print(f'O produto que mais vendeu foi `{max_produto}` com `{max_quant}` unidades.')
+    """
+return prompt
+def execute_generated_code(code, dataframes):
+"""Executa o código gerado com segurança, capturando a saída"""
+old_stdout = sys.stdout
+redirected_output = StringIO()
+sys.stdout = redirected_output
+try:
+local_vars = {'dfs': dataframes, 'pd': pd}
+exec(code, globals(), local_vars)
+sys.stdout = old_stdout
+return redirected_output.getvalue().strip()
+except Exception as e:
+sys.stdout = old_stdout
+return f"Erro ao executar código: {str(e)}"
+finally:
+sys.stdout = old_stdout
+def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
+"""Chamada síncrona ao modelo com tratamento de erros aprimorado"""
+if model is None:
+raise RuntimeError("Modelo não configurado.")
+try:
+resp = model.generate_content(
+prompt,
+generation_config={
+"max_output_tokens": max_output_tokens,
+"temperature": 0.4,
+}
+)
