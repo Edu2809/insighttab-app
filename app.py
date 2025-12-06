@@ -573,7 +573,7 @@ try:
         "max_output_tokens": MAX_OUTPUT_TOKENS,
     }
     model = genai.GenerativeModel(
-        "gemini-2.5.flash", # Corrigido para modelo válido e com contexto longo para lidar com dados completos
+        "gemini-2.5-flash", # Corrigido para modelo válido e com contexto longo para lidar com dados completos
         generation_config=generation_config
     )
 except Exception:
