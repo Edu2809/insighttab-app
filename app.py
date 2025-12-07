@@ -101,7 +101,7 @@ def carregar_google_sheets():
 MODEL_TIMEOUT = 180 # Aumentado para 3 minutos
 MODEL_RETRIES = 3 # Mais tentativas
 RETRY_BACKOFF = 1.5
-SAMPLE_SIZE = None # Removido sampling para ler todos os dados e evitar erros de valores
+SAMPLE_SIZE = 1000 # Restaurado sampling para evitar prompts muito longos que causam erros
 MAX_OUTPUT_TOKENS = 8192 # Aumentado para o limite máximo suportado pelos modelos Gemini para permitir respostas mais longas e completas
 st.set_page_config(
     page_title="InsightTab - Analista Inteligente",
@@ -579,15 +579,34 @@ try:
         "top_k": 40,
         "max_output_tokens": MAX_OUTPUT_TOKENS,
     }
+    safety_settings = [
+        {
+            "category": "HARM_CATEGORY_HARASSMENT",
+            "threshold": "BLOCK_NONE"
+        },
+        {
+            "category": "HARM_CATEGORY_HATE_SPEECH",
+            "threshold": "BLOCK_NONE"
+        },
+        {
+            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            "threshold": "BLOCK_NONE"
+        },
+        {
+            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+            "threshold": "BLOCK_NONE"
+        },
+    ]
     model = genai.GenerativeModel(
-        "gemini-2.5-flash", # Corrigido para modelo válido e com contexto longo para lidar com dados completos
-        generation_config=generation_config
+        "gemini-1.5-flash-latest", # Corrigido para modelo válido e com contexto longo para lidar com dados completos
+        generation_config=generation_config,
+        safety_settings=safety_settings
     )
 except Exception:
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-pro-latest", safety_settings=safety_settings)
     except:
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest", safety_settings=safety_settings)
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
     """Lê arquivo Excel ou CSV e retorna DataFrame"""
@@ -685,9 +704,13 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                     except:
                         pass
            
-                # Adicionar dados completos (sem sampling para precisão)
-                detailed_data += f"\n--- Dados completos: {sheet_name} ---\n"
-                detailed_data += sheet_df.to_string(index=False)
+                # Adicionar amostra de dados (com sampling para evitar prompts longos)
+                if sample_size and len(sheet_df) > sample_size:
+                    detailed_data += f"\n--- Amostra: {sheet_name} (primeiras {sample_size} linhas) ---\n"
+                    detailed_data += sheet_df.head(sample_size).to_string(index=False)
+                else:
+                    detailed_data += f"\n--- Dados completos: {sheet_name} ---\n"
+                    detailed_data += sheet_df.to_string(index=False)
                 detailed_data += "\n"
         else:
             total_rows += len(df)
@@ -730,9 +753,13 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 except:
                     pass
        
-            # Adicionar dados completos (sem sampling para precisão)
-            detailed_data += f"\n--- Dados completos: {filename} ---\n"
-            detailed_data += df.to_string(index=False)
+            # Adicionar amostra de dados (com sampling para evitar prompts longos)
+            if sample_size and len(df) > sample_size:
+                detailed_data += f"\n--- Amostra: {filename} (primeiras {sample_size} linhas) ---\n"
+                detailed_data += df.head(sample_size).to_string(index=False)
+            else:
+                detailed_data += f"\n--- Dados completos: {filename} ---\n"
+                detailed_data += df.to_string(index=False)
             detailed_data += "\n"
     # Prompt otimizado com ênfase em não alucinar
     prompt = f"""Você é um analista de dados especializado em análise de planilhas.
@@ -767,15 +794,16 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
             }
         )
         if not resp.candidates:
-            if hasattr(resp.prompt_feedback, 'block_reason'):
-                return f"Prompt bloqueado: {resp.prompt_feedback.block_reason}"
-            return "Nenhum candidato retornado na resposta."
+            block_reason = resp.prompt_feedback.block_reason if hasattr(resp.prompt_feedback, 'block_reason') else "Razão desconhecida"
+            return f"Prompt bloqueado: {block_reason}. Tente reformular a pergunta ou verifique os dados."
         candidate = resp.candidates[0]
         if candidate.finish_reason not in [1, 2]: # 1: FINISH_REASON_UNSPECIFIED, 2: FINISH_REASON_STOP
-            return f"Geração parada: {candidate.finish_reason}. Possivelmente conteúdo bloqueado por segurança ou outro motivo."
+            return f"Geração parada: {candidate.finish_reason}. Possivelmente conteúdo bloqueado por segurança ou outro motivo. Tente reformular."
         if not candidate.content.parts:
-            return "Nenhuma parte de conteúdo na resposta."
+            return "Nenhuma parte de conteúdo na resposta. Possivelmente bloqueado por segurança. Tente reformular a pergunta."
         return candidate.content.parts[0].text
+    except genai.types.generation_types.BlockedPromptException as bpe:
+        return f"Prompt bloqueado por razões de segurança: {str(bpe)}. Tente reformular a pergunta."
     except Exception as e:
         # Se falhar com o modelo atual, tentar com parâmetros mais simples
         try:
@@ -787,7 +815,7 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
                 return "Nenhuma parte de conteúdo na resposta alternativa."
             return candidate.content.parts[0].text
         except:
-            raise e
+            return f"Erro ao gerar conteúdo: {str(e)}"
 def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
     """Chama modelo com timeout e retry otimizado"""
     last_exc = None
@@ -805,7 +833,7 @@ def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
             except Exception as e:
                 last_exc = e
                 # Se for erro de API, tentar novamente após backoff
-                if "429" in str(e) or "quota" in str(e).lower():
+                if "429" in str(e) or "quota" in str(e).lower() or "rate limit" in str(e).lower():
                     time.sleep(RETRY_BACKOFF ** attempt)
                 else:
                     # Para outros erros, falhar imediatamente
