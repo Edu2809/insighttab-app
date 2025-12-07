@@ -598,15 +598,15 @@ try:
         },
     ]
     model = genai.GenerativeModel(
-        "gemini-1.5-flash-latest", # Corrigido para modelo válido e com contexto longo para lidar com dados completos
+        "gemini-2.5-flash", # Corrigido para modelo válido e com contexto longo para lidar com dados completos
         generation_config=generation_config,
         safety_settings=safety_settings
     )
 except Exception:
     try:
-        model = genai.GenerativeModel("gemini-1.5-pro-latest", safety_settings=safety_settings)
+        model = genai.GenerativeModel("gemini-2.5-flash, safety_settings=safety_settings)
     except:
-        model = genai.GenerativeModel("gemini-1.5-flash-latest", safety_settings=safety_settings)
+        model = genai.GenerativeModel("gemini-2.5-flash", safety_settings=safety_settings)
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
     """Lê arquivo Excel ou CSV e retorna DataFrame"""
