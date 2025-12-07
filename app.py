@@ -604,7 +604,7 @@ try:
     )
 except Exception:
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash, safety_settings=safety_settings)
+        model = genai.GenerativeModel("gemini-2.5-flash", safety_settings=safety_settings)
     except:
         model = genai.GenerativeModel("gemini-2.5-flash", safety_settings=safety_settings)
 # ========== FUNÇÕES AUXILIARES ==========
