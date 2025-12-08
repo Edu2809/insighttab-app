@@ -101,7 +101,7 @@ def carregar_google_sheets():
 MODEL_TIMEOUT = 180 # Aumentado para 3 minutos
 MODEL_RETRIES = 3 # Mais tentativas
 RETRY_BACKOFF = 1.5
-SAMPLE_SIZE = 1000 # Restaurado sampling para evitar prompts muito longos que causam erros
+SAMPLE_SIZE = 500 # Reduzido para evitar prompts muito longos e erros de bloqueio
 MAX_OUTPUT_TOKENS = 8192 # Aumentado para o limite máximo suportado pelos modelos Gemini para permitir respostas mais longas e completas
 st.set_page_config(
     page_title="InsightTab - Analista Inteligente",
@@ -606,7 +606,7 @@ except Exception:
     try:
         model = genai.GenerativeModel("gemini-2.5-flash", safety_settings=safety_settings)
     except:
-        model = genai.GenerativeModel("gemini-2.5-flash", safety_settings=safety_settings)
+        model = genai.GenerativeModel("gemini-2.5.flash", safety_settings=safety_settings)
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
     """Lê arquivo Excel ou CSV e retorna DataFrame"""
