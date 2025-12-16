@@ -61,7 +61,6 @@ def carregar_google_sheets():
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(credentials)
         dataframes = {}
- 
         for nome, sheet_id in SHEET_IDS.items():
             if sheet_id:
                 retries = 3
@@ -80,10 +79,10 @@ def carregar_google_sheets():
                                 aba_nome = worksheet.title
                                 key = f"{nome} - {aba_nome}" if aba_nome != "Sheet1" else nome
                                 dataframes[key] = df
-                        break  # Sucesso, sair do loop de retries
+                        break # Sucesso, sair do loop de retries
                     except Exception as e:
                         if attempt < retries - 1 and "503" in str(e):
-                            time.sleep(2 ** attempt)  # Backoff exponencial
+                            time.sleep(2 ** attempt) # Backoff exponencial
                             continue
                         else:
                             st.warning(f"⚠️ Erro ao carregar {nome} após {retries} tentativas: {str(e)}")
@@ -598,7 +597,7 @@ try:
         },
     ]
     model = genai.GenerativeModel(
-        "gemini-2.5-flash", # Corrigido para modelo válido e com contexto longo para lidar com dados completos
+        "gemini-2.5-flash", # Corrigido para modelo válido com suporte a streaming e contexto longo
         generation_config=generation_config,
         safety_settings=safety_settings
     )
@@ -606,7 +605,7 @@ except Exception:
     try:
         model = genai.GenerativeModel("gemini-2.5-flash", safety_settings=safety_settings)
     except:
-        model = genai.GenerativeModel("gemini-2.5.flash", safety_settings=safety_settings)
+        model = genai.GenerativeModel("gemini-2.5-flash", safety_settings=safety_settings)
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
     """Lê arquivo Excel ou CSV e retorna DataFrame"""
@@ -617,12 +616,10 @@ def read_uploaded_file_to_df(uploaded_file):
         content = uploaded_file.getvalue()
         bio = BytesIO(content)
         name = uploaded_file.name.lower()
- 
         if name.endswith(".csv"):
             df = pd.read_csv(bio)
             bio.close()
             return df
- 
         try:
             df = pd.read_excel(bio, engine="openpyxl")
             bio.close()
@@ -665,11 +662,11 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
         if isinstance(df, dict):
             for sheet_name, sheet_df in df.items():
                 total_rows += len(sheet_df)
-           
+          
                 # Adicionar resumo estatístico
                 summary_data += f"\n--- Resumo: {sheet_name} ({len(sheet_df)} linhas, {len(sheet_df.columns)} colunas) ---\n"
                 summary_data += f"Colunas: {', '.join(sheet_df.columns.tolist())}\n"
-           
+          
                 # Estatísticas básicas para colunas numéricas
                 numeric_cols = sheet_df.select_dtypes(include=['number']).columns.tolist()
                 if numeric_cols:
@@ -679,7 +676,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                             summary_data += f" {col}: min={sheet_df[col].min()}, max={sheet_df[col].max()}, média={sheet_df[col].mean():.2f}, soma={sheet_df[col].sum():.2f}\n"
                         except:
                             pass
-               
+              
                 # Estatísticas para colunas categóricas (para evitar alucinações em contagens)
                 object_cols = sheet_df.select_dtypes(include=['object']).columns.tolist()
                 if object_cols:
@@ -689,7 +686,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                             summary_data += f" {col}: valores únicos={sheet_df[col].nunique()}, top valores:\n{sheet_df[col].value_counts().head(10).to_string()}\n"
                         except:
                             pass
-           
+          
                 # Agregações comuns se colunas relevantes existirem (ex: Produto e Quantidade)
                 if 'Produto' in sheet_df.columns and 'Quantidade' in numeric_cols:
                     try:
@@ -703,7 +700,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                         summary_data += f"Top produtos por valor:\n{agg_val.to_string()}\n"
                     except:
                         pass
-           
+          
                 # Adicionar amostra de dados (com sampling para evitar prompts longos)
                 if sample_size and len(sheet_df) > sample_size:
                     detailed_data += f"\n--- Amostra: {sheet_name} (primeiras {sample_size} linhas) ---\n"
@@ -714,11 +711,11 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 detailed_data += "\n"
         else:
             total_rows += len(df)
-       
+      
             # Adicionar resumo estatístico
             summary_data += f"\n--- Resumo: {filename} ({len(df)} linhas, {len(df.columns)} colunas) ---\n"
             summary_data += f"Colunas: {', '.join(df.columns.tolist())}\n"
-       
+      
             # Estatísticas básicas para colunas numéricas
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             if numeric_cols:
@@ -728,7 +725,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                         summary_data += f" {col}: min={df[col].min()}, max={df[col].max()}, média={df[col].mean():.2f}, soma={df[col].sum():.2f}\n"
                     except:
                         pass
-           
+          
             # Estatísticas para colunas categóricas (para evitar alucinações em contagens)
             object_cols = df.select_dtypes(include=['object']).columns.tolist()
             if object_cols:
@@ -738,7 +735,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                         summary_data += f" {col}: valores únicos={df[col].nunique()}, top valores:\n{df[col].value_counts().head(10).to_string()}\n"
                     except:
                         pass
-       
+      
             # Agregações comuns se colunas relevantes existirem (ex: Produto e Quantidade)
             if 'Produto' in df.columns and 'Quantidade' in numeric_cols:
                 try:
@@ -752,7 +749,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                     summary_data += f"Top produtos por valor:\n{agg_val.to_string()}\n"
                 except:
                     pass
-       
+      
             # Adicionar amostra de dados (com sampling para evitar prompts longos)
             if sample_size and len(df) > sample_size:
                 detailed_data += f"\n--- Amostra: {filename} (primeiras {sample_size} linhas) ---\n"
@@ -761,7 +758,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 detailed_data += f"\n--- Dados completos: {filename} ---\n"
                 detailed_data += df.to_string(index=False)
             detailed_data += "\n"
-    # Prompt otimizado com ênfase em não alucinar
+    # Prompt otimizado com ênfase em não alucinar e gerar resposta completa
     prompt = f"""Você é um analista de dados especializado em análise de planilhas.
 RESUMO DOS DADOS DISPONÍVEIS (Total: {total_rows} linhas):
 {summary_data}
@@ -779,10 +776,11 @@ INSTRUÇÕES IMPORTANTES:
 8. Use APENAS código inline do Markdown (crases) para destacar: `nomes de produtos`, `IDs` e `valores monetários`.
 9. Se os dados não forem suficientes para responder exatamente, informe isso claramente sem inventar.
 10. Para perguntas complexas, forneça análise detalhada com base EXCLUSIVAMENTE nas estatísticas e dados disponíveis, sem suposições.
+11. Certifique-se de que sua resposta seja completa e não pare no meio; continue até concluir todos os insights relevantes.
 Responda de forma direta e completa:"""
     return prompt
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
-    """Chamada síncrona ao modelo com tratamento de erros aprimorado"""
+    """Chamada síncrona ao modelo com streaming para respostas completas e tratamento de erros aprimorado"""
     if model is None:
         raise RuntimeError("Modelo não configurado.")
     try:
@@ -791,21 +789,26 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
             generation_config={
                 "max_output_tokens": max_output_tokens,
                 "temperature": 0.4,
-            }
+            },
+            stream=True  # Ativar streaming para coletar resposta completa em partes
         )
-        if not resp.candidates:
-            block_reason = resp.prompt_feedback.block_reason if hasattr(resp.prompt_feedback, 'block_reason') else "Razão desconhecida"
-            return f"Prompt bloqueado: {block_reason}. Tente reformular a pergunta ou verifique os dados."
-        candidate = resp.candidates[0]
-        if candidate.finish_reason not in [1, 2]: # 1: FINISH_REASON_UNSPECIFIED, 2: FINISH_REASON_STOP
-            return f"Geração parada: {candidate.finish_reason}. Possivelmente conteúdo bloqueado por segurança ou outro motivo. Tente reformular."
-        if not candidate.content.parts:
+        full_text = ""
+        for chunk in resp:
+            if hasattr(chunk, 'candidates') and chunk.candidates:
+                candidate = chunk.candidates[0]
+                if candidate.finish_reason not in [1, 2]:  # Verificar razão de término
+                    return f"Geração parada: {candidate.finish_reason}. Possivelmente conteúdo bloqueado por segurança ou outro motivo. Tente reformular."
+            if hasattr(chunk, 'text') and chunk.text:
+                full_text += chunk.text
+            elif hasattr(chunk, 'content') and chunk.content.parts:
+                full_text += chunk.content.parts[0].text
+        if not full_text:
             return "Nenhuma parte de conteúdo na resposta. Possivelmente bloqueado por segurança. Tente reformular a pergunta."
-        return candidate.content.parts[0].text
+        return full_text
     except genai.types.generation_types.BlockedPromptException as bpe:
         return f"Prompt bloqueado por razões de segurança: {str(bpe)}. Tente reformular a pergunta."
     except Exception as e:
-        # Se falhar com o modelo atual, tentar com parâmetros mais simples
+        # Se falhar com o modelo atual, tentar sem streaming
         try:
             resp = model.generate_content(prompt)
             if not resp.candidates:
@@ -838,7 +841,7 @@ def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
                 else:
                     # Para outros erros, falhar imediatamente
                     break
-   
+  
         # Backoff exponencial entre tentativas
         if attempt < MODEL_RETRIES:
             time.sleep(RETRY_BACKOFF ** (attempt - 1))
@@ -875,7 +878,6 @@ with st.sidebar:
         for file in uploaded_files:
             if file.name not in st.session_state.dataframes:
                 new_files.append(file)
- 
         if new_files:
             with st.spinner(f"📊 Carregando {len(new_files)} arquivo(s)..."):
                 for file in new_files:
@@ -912,7 +914,6 @@ with st.sidebar:
                         st.success(f"✅ Planilha {filename} excluída!")
                         st.rerun()
             total_rows += rows
- 
         st.markdown(f'<div style="margin-top: 10px; padding: 10px; background: var(--card-bg); border-radius: 8px; text-align: center;"><b>Total: {total_rows:,} linhas</b></div>', unsafe_allow_html=True)
     # Verificar se existem planilhas manuais usando a nova função
     has_manual_sheets = any(
@@ -937,7 +938,7 @@ def render_chat_history():
             f'<div class="chat-message user-message"><b>👤 Você:</b><br>{chat["question"]}</div>',
             unsafe_allow_html=True
         )
-  
+ 
         # Mensagem do bot apenas se houver resposta
         if chat["answer"]:
             st.markdown(
@@ -972,13 +973,13 @@ if st.session_state.dataframes:
         if user_question != st.session_state.last_question:
             st.session_state.processing = True
             st.session_state.last_question = user_question
-      
+     
             # Adicionar pergunta ao histórico
             st.session_state.chat_history.append({
                 "question": user_question,
                 "answer": ""
             })
-      
+     
             # Recarregar para mostrar mensagem de processamento
             st.rerun()
     # Processar pergunta se estiver em modo de processamento
@@ -996,7 +997,7 @@ if st.session_state.dataframes:
                     answer = "❌ Limite de requisições atingido. Por favor, aguarde alguns segundos e tente novamente. Se persistir, verifique sua quota no console do Google AI ou use uma chave com billing ativado."
                 else:
                     answer = f"❌ Erro ao processar: {error_msg[:200]}"
-     
+    
             # Atualizar resposta
             st.session_state.chat_history[-1]["answer"] = answer
             st.session_state.processing = False
@@ -1044,13 +1045,13 @@ else:
         if user_question != st.session_state.last_question:
             st.session_state.processing = True
             st.session_state.last_question = user_question
-      
+     
             # Adicionar pergunta ao histórico
             st.session_state.chat_history.append({
                 "question": user_question,
                 "answer": ""
             })
-      
+     
             # Recarregar para mostrar mensagem de processamento
             st.rerun()
     # Processar pergunta se estiver em modo de processamento
@@ -1064,7 +1065,7 @@ else:
                 answer = "⏱️ Tempo limite atingido (60s). Tente novamente."
             except Exception as e:
                 answer = f"❌ Erro: {str(e)[:200]}"
-     
+    
             # Atualizar resposta
             st.session_state.chat_history[-1]["answer"] = answer
             st.session_state.processing = False
