@@ -284,7 +284,7 @@ st.markdown(
         margin-right: 15px;
         vertical-align: middle;
         position: relative;
-        top: 20px;
+        top: -5px;
     }
     /* Stats boxes */
     .stat-box {
@@ -597,15 +597,15 @@ try:
         },
     ]
     model = genai.GenerativeModel(
-        "gemini-1.5-flash", # Alterado para modelo com maior cota gratuita
+        "gemini-2.5-flash", # Alterado para modelo com maior cota gratuita
         generation_config=generation_config,
         safety_settings=safety_settings
     )
 except Exception:
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash", safety_settings=safety_settings)
+        model = genai.GenerativeModel("gemini-2.5-flash", safety_settings=safety_settings)
     except:
-        model = genai.GenerativeModel("gemini-1.5-flash", safety_settings=safety_settings)
+        model = genai.GenerativeModel("gemini-2.5-flash", safety_settings=safety_settings)
 # ========== FUNÇÕES AUXILIARES ==========
 def read_uploaded_file_to_df(uploaded_file):
     """Lê arquivo Excel ou CSV e retorna DataFrame"""
