@@ -597,7 +597,7 @@ try:
         },
     ]
     model = genai.GenerativeModel(
-        "gemini-2.5-flash", # Corrigido para modelo válido com suporte a streaming e contexto longo
+        "gemini-2.5-flash", # Modelo mais capaz para respostas completas
         generation_config=generation_config,
         safety_settings=safety_settings
     )
@@ -758,7 +758,7 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 detailed_data += f"\n--- Dados completos: {filename} ---\n"
                 detailed_data += df.to_string(index=False)
             detailed_data += "\n"
-    # Prompt otimizado com ênfase em não alucinar e gerar resposta completa
+    # Prompt otimizado com ênfase em não alucinar
     prompt = f"""Você é um analista de dados especializado em análise de planilhas.
 RESUMO DOS DADOS DISPONÍVEIS (Total: {total_rows} linhas):
 {summary_data}
@@ -780,7 +780,7 @@ INSTRUÇÕES IMPORTANTES:
 Responda de forma direta e completa:"""
     return prompt
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
-    """Chamada síncrona ao modelo com streaming para respostas completas e tratamento de erros aprimorado"""
+    """Chamada síncrona ao modelo com tratamento de erros aprimorado"""
     if model is None:
         raise RuntimeError("Modelo não configurado.")
     try:
@@ -790,14 +790,10 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
                 "max_output_tokens": max_output_tokens,
                 "temperature": 0.4,
             },
-            stream=True  # Ativar streaming para coletar resposta completa em partes
+            stream=True  # Streaming para coletar resposta completa
         )
         full_text = ""
         for chunk in resp:
-            if hasattr(chunk, 'candidates') and chunk.candidates:
-                candidate = chunk.candidates[0]
-                if candidate.finish_reason not in [1, 2]:  # Verificar razão de término
-                    return f"Geração parada: {candidate.finish_reason}. Possivelmente conteúdo bloqueado por segurança ou outro motivo. Tente reformular."
             if hasattr(chunk, 'text') and chunk.text:
                 full_text += chunk.text
             elif hasattr(chunk, 'content') and chunk.content.parts:
@@ -808,14 +804,17 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
     except genai.types.generation_types.BlockedPromptException as bpe:
         return f"Prompt bloqueado por razões de segurança: {str(bpe)}. Tente reformular a pergunta."
     except Exception as e:
-        # Se falhar com o modelo atual, tentar sem streaming
+        # Se falhar com o modelo atual, tentar com parâmetros mais simples
         try:
             resp = model.generate_content(prompt)
             if not resp.candidates:
-                return "Nenhum candidato retornado na resposta alternativa."
+                block_reason = resp.prompt_feedback.block_reason if hasattr(resp.prompt_feedback, 'block_reason') else "Razão desconhecida"
+                return f"Prompt bloqueado: {block_reason}. Tente reformular a pergunta ou verifique os dados."
             candidate = resp.candidates[0]
+            if candidate.finish_reason not in [1, 2]: # 1: FINISH_REASON_UNSPECIFIED, 2: FINISH_REASON_STOP
+                return f"Geração parada: {candidate.finish_reason}. Possivelmente conteúdo bloqueado por segurança ou outro motivo. Tente reformular."
             if not candidate.content.parts:
-                return "Nenhuma parte de conteúdo na resposta alternativa."
+                return "Nenhuma parte de conteúdo na resposta. Possivelmente bloqueado por segurança. Tente reformular a pergunta."
             return candidate.content.parts[0].text
         except:
             return f"Erro ao gerar conteúdo: {str(e)}"
