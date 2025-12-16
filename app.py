@@ -777,7 +777,7 @@ INSTRUÇÕES IMPORTANTES:
 9. Se os dados não forem suficientes para responder exatamente, informe isso claramente sem inventar.
 10. Para perguntas complexas, forneça análise detalhada com base EXCLUSIVAMENTE nas estatísticas e dados disponíveis, sem suposições.
 11. Certifique-se de que sua resposta seja completa e não pare no meio; continue até concluir todos os insights relevantes.
-12. Se o usuário pedir para mostrar todos os dados, a planilha completa ou similar, responda apenas 'Mostrando todos os dados da planilha.' sem incluir os dados na resposta, pois eles serão exibidos em uma tabela separada.
+12. Se o usuário pedir para mostrar todos os dados, a planilha completa, todas as linhas ou similar, responda apenas 'Mostrando todos os dados da planilha.' sem incluir os dados na resposta, pois eles serão exibidos em uma tabela separada.
 Responda de forma direta e completa:"""
     return prompt
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
@@ -962,7 +962,7 @@ def render_chat_history():
             )
             # Verificar se precisa exibir a tabela completa
             question_lower = chat["question"].lower()
-            if any(keyword in question_lower for keyword in ["todos os dados", "planilha completa", "mostre a planilha", "mostre todos"]):
+            if any(keyword in question_lower for keyword in ["todos os dados", "todas as linhas", "planilha completa", "mostre a planilha", "mostre todos", "diga as linhas", "exiba a planilha", "linhas da planilha", "me diga todas as linhas", "quero todas as linhas", "mostre todas as linhas"]):
                 displayed = False
                 for m_lower, m_key in month_map.items():
                     if m_lower in question_lower:
@@ -970,7 +970,7 @@ def render_chat_history():
                             st.markdown(f"**Planilha: {m_key}**")
                             st.dataframe(st.session_state.dataframes[m_key])
                             displayed = True
-                if not displayed and any(word in question_lower for word in ["todas", "cada", "todos"]):
+                if not displayed and any(word in question_lower for word in ["todas", "cada", "todos", "todas as planilhas"]):
                     for key, df in st.session_state.dataframes.items():
                         st.markdown(f"**Planilha: {key}**")
                         st.dataframe(df)
