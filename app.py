@@ -100,7 +100,7 @@ def carregar_google_sheets():
 MODEL_TIMEOUT = 180 # Aumentado para 3 minutos
 MODEL_RETRIES = 3 # Mais tentativas
 RETRY_BACKOFF = 1.5
-SAMPLE_SIZE = 500 # Reduzido para evitar prompts muito longos e erros de bloqueio
+SAMPLE_SIZE = 50 # Reduzido para evitar prompts muito longos e erros de bloqueio
 MAX_OUTPUT_TOKENS = 8192 # Aumentado para o limite máximo suportado pelos modelos Gemini para permitir respostas mais longas e completas
 st.set_page_config(
     page_title="InsightTab - Analista Inteligente",
@@ -754,10 +754,9 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
             if sample_size and len(df) > sample_size:
                 detailed_data += f"\n--- Amostra: {filename} (primeiras {sample_size} linhas) ---\n"
                 detailed_data += df.head(sample_size).to_string(index=False)
-            else:
-                detailed_data += f"\n--- Dados completos: {filename} ---\n"
-                detailed_data += df.to_string(index=False)
-            detailed_data += "\n"
+                else:
+    pass
+
     # Prompt otimizado com ênfase em não alucinar
     prompt = f"""Você é um analista de dados especializado em análise de planilhas.
 RESUMO DOS DADOS DISPONÍVEIS (Total: {total_rows} linhas):
