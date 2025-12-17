@@ -694,25 +694,26 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                             summary_data += f"Top produtos por quantidade:\n{agg_qty.to_string()}\n"
                     except:
                         pass
-                if 'Produto' in sheet_df.columns and 'Valor' in numeric_cols:
+                # Agregações para Receita_Total se existir
+                if 'Produto' in sheet_df.columns and 'Receita_Total' in numeric_cols:
                     try:
-                        agg_val = sheet_df.groupby('Produto')['Valor'].sum().sort_values(ascending=False)
+                        agg_val = sheet_df.groupby('Produto')['Receita_Total'].sum().sort_values(ascending=False)
                         if len(agg_val) <= 50:
-                            summary_data += f"Valor total por produto (completo):\n{agg_val.to_string()}\n"
+                            summary_data += f"Receita total por produto (completa):\n{agg_val.to_string()}\n"
                         else:
                             agg_val = agg_val.head(10)
-                            summary_data += f"Top produtos por valor:\n{agg_val.to_string()}\n"
+                            summary_data += f"Top produtos por receita:\n{agg_val.to_string()}\n"
                     except:
                         pass
                 # Maior venda individual
-                if 'Valor' in numeric_cols:
+                if 'Receita_Total' in numeric_cols:
                     try:
-                        max_idx = sheet_df['Valor'].idxmax()
+                        max_idx = sheet_df['Receita_Total'].idxmax()
                         max_row = sheet_df.loc[max_idx]
                         product = max_row.get('Produto', 'Desconhecido')
                         data = max_row.get('Data', 'Desconhecida')
-                        valor = max_row['Valor']
-                        summary_data += f"Maior venda individual: Produto `{product}`, Data `{data}`, Valor R$ {valor:.2f}\n"
+                        valor = max_row['Receita_Total']
+                        summary_data += f"Maior venda individual: Produto `{product}`, Data `{data}`, Receita_Total R$ {valor:.2f}\n"
                     except:
                         pass
                 # Adicionar amostra de dados (com sampling para evitar prompts longos)
@@ -757,25 +758,26 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                         summary_data += f"Top produtos por quantidade:\n{agg_qty.to_string()}\n"
                 except:
                     pass
-            if 'Produto' in df.columns and 'Valor' in numeric_cols:
+            # Agregações para Receita_Total se existir
+            if 'Produto' in df.columns and 'Receita_Total' in numeric_cols:
                 try:
-                    agg_val = df.groupby('Produto')['Valor'].sum().sort_values(ascending=False)
+                    agg_val = df.groupby('Produto')['Receita_Total'].sum().sort_values(ascending=False)
                     if len(agg_val) <= 50:
-                        summary_data += f"Valor total por produto (completo):\n{agg_val.to_string()}\n"
+                        summary_data += f"Receita total por produto (completa):\n{agg_val.to_string()}\n"
                     else:
                         agg_val = agg_val.head(10)
-                        summary_data += f"Top produtos por valor:\n{agg_val.to_string()}\n"
+                        summary_data += f"Top produtos por receita:\n{agg_val.to_string()}\n"
                 except:
                     pass
             # Maior venda individual
-            if 'Valor' in numeric_cols:
+            if 'Receita_Total' in numeric_cols:
                 try:
-                    max_idx = df['Valor'].idxmax()
+                    max_idx = df['Receita_Total'].idxmax()
                     max_row = df.loc[max_idx]
                     product = max_row.get('Produto', 'Desconhecido')
                     data = max_row.get('Data', 'Desconhecida')
-                    valor = max_row['Valor']
-                    summary_data += f"Maior venda individual: Produto `{product}`, Data `{data}`, Valor R$ {valor:.2f}\n"
+                    valor = max_row['Receita_Total']
+                    summary_data += f"Maior venda individual: Produto `{product}`, Data `{data}`, Receita_Total R$ {valor:.2f}\n"
                 except:
                     pass
             # Adicionar amostra de dados (com sampling para evitar prompts longos)
@@ -796,8 +798,8 @@ PERGUNTA DO USUÁRIO: {question}
 INSTRUÇÕES IMPORTANTES:
 1. Use SOMENTE os dados fornecidos acima. NÃO alucine ou invente valores. Se o valor exato não estiver nos dados ou resumo, informe que não tem informação suficiente.
 2. Para contagens, somas ou quantidades, calcule EXATAMENTE com base nos dados completos fornecidos, sem assumir nada além do que está listado.
-3. Use os dados estatísticos (min, max, média, soma, top valores, valor total por produto, maior venda individual) para responder perguntas sobre totais, agregações, contagens, tops e máximos.
-4. Para perguntas sobre top produtos ou maior valor total, use as seções 'Valor total por produto' ou 'Top produtos por valor' do resumo.
+3. Use os dados estatísticos (min, max, média, soma, top valores, quantidade por produto, receita total por produto, maior venda individual) para responder perguntas sobre totais, agregações, contagens, tops e máximos.
+4. Para perguntas sobre top produtos ou maior valor total, use as seções 'Receita total por produto' ou 'Top produtos por receita' do resumo.
 5. Para perguntas sobre maior venda individual, use a seção 'Maior venda individual' do resumo.
 6. Se precisar de cálculos específicos, baseie-se estritamente nos dados e resumos fornecidos.
 7. Responda em português brasileiro de forma clara, objetiva e profissional.
