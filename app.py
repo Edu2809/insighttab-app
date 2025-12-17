@@ -662,11 +662,9 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
         if isinstance(df, dict):
             for sheet_name, sheet_df in df.items():
                 total_rows += len(sheet_df)
- 
                 # Adicionar resumo estatístico
                 summary_data += f"\n--- Resumo: {sheet_name} ({len(sheet_df)} linhas, {len(sheet_df.columns)} colunas) ---\n"
                 summary_data += f"Colunas: {', '.join(sheet_df.columns.tolist())}\n"
- 
                 # Estatísticas básicas para colunas numéricas
                 numeric_cols = sheet_df.select_dtypes(include=['number']).columns.tolist()
                 if numeric_cols:
@@ -676,7 +674,6 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                             summary_data += f" {col}: min={sheet_df[col].min()}, max={sheet_df[col].max()}, média={sheet_df[col].mean():.2f}, soma={sheet_df[col].sum():.2f}\n"
                         except:
                             pass
- 
                 # Estatísticas para colunas categóricas (para evitar alucinações em contagens)
                 object_cols = sheet_df.select_dtypes(include=['object']).columns.tolist()
                 if object_cols:
@@ -686,21 +683,38 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                             summary_data += f" {col}: valores únicos={sheet_df[col].nunique()}, top valores:\n{sheet_df[col].value_counts().head(10).to_string()}\n"
                         except:
                             pass
- 
                 # Agregações comuns se colunas relevantes existirem (ex: Produto e Quantidade)
                 if 'Produto' in sheet_df.columns and 'Quantidade' in numeric_cols:
                     try:
-                        agg_qty = sheet_df.groupby('Produto')['Quantidade'].sum().sort_values(ascending=False).head(10)
-                        summary_data += f"Top produtos por quantidade:\n{agg_qty.to_string()}\n"
+                        agg_qty = sheet_df.groupby('Produto')['Quantidade'].sum().sort_values(ascending=False)
+                        if len(agg_qty) <= 50:
+                            summary_data += f"Quantidade por produto (completa):\n{agg_qty.to_string()}\n"
+                        else:
+                            agg_qty = agg_qty.head(10)
+                            summary_data += f"Top produtos por quantidade:\n{agg_qty.to_string()}\n"
                     except:
                         pass
                 if 'Produto' in sheet_df.columns and 'Valor' in numeric_cols:
                     try:
-                        agg_val = sheet_df.groupby('Produto')['Valor'].sum().sort_values(ascending=False).head(10)
-                        summary_data += f"Top produtos por valor:\n{agg_val.to_string()}\n"
+                        agg_val = sheet_df.groupby('Produto')['Valor'].sum().sort_values(ascending=False)
+                        if len(agg_val) <= 50:
+                            summary_data += f"Valor total por produto (completo):\n{agg_val.to_string()}\n"
+                        else:
+                            agg_val = agg_val.head(10)
+                            summary_data += f"Top produtos por valor:\n{agg_val.to_string()}\n"
                     except:
                         pass
- 
+                # Maior venda individual
+                if 'Valor' in numeric_cols:
+                    try:
+                        max_idx = sheet_df['Valor'].idxmax()
+                        max_row = sheet_df.loc[max_idx]
+                        product = max_row.get('Produto', 'Desconhecido')
+                        data = max_row.get('Data', 'Desconhecida')
+                        valor = max_row['Valor']
+                        summary_data += f"Maior venda individual: Produto `{product}`, Data `{data}`, Valor R$ {valor:.2f}\n"
+                    except:
+                        pass
                 # Adicionar amostra de dados (com sampling para evitar prompts longos)
                 if sample_size and len(sheet_df) > sample_size:
                     detailed_data += f"\n--- Amostra: {sheet_name} (primeiras {sample_size} linhas) ---\n"
@@ -711,11 +725,9 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                 detailed_data += "\n"
         else:
             total_rows += len(df)
- 
             # Adicionar resumo estatístico
             summary_data += f"\n--- Resumo: {filename} ({len(df)} linhas, {len(df.columns)} colunas) ---\n"
             summary_data += f"Colunas: {', '.join(df.columns.tolist())}\n"
- 
             # Estatísticas básicas para colunas numéricas
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             if numeric_cols:
@@ -725,7 +737,6 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                         summary_data += f" {col}: min={df[col].min()}, max={df[col].max()}, média={df[col].mean():.2f}, soma={df[col].sum():.2f}\n"
                     except:
                         pass
- 
             # Estatísticas para colunas categóricas (para evitar alucinações em contagens)
             object_cols = df.select_dtypes(include=['object']).columns.tolist()
             if object_cols:
@@ -735,27 +746,46 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                         summary_data += f" {col}: valores únicos={df[col].nunique()}, top valores:\n{df[col].value_counts().head(10).to_string()}\n"
                     except:
                         pass
- 
             # Agregações comuns se colunas relevantes existirem (ex: Produto e Quantidade)
             if 'Produto' in df.columns and 'Quantidade' in numeric_cols:
                 try:
-                    agg_qty = df.groupby('Produto')['Quantidade'].sum().sort_values(ascending=False).head(10)
-                    summary_data += f"Top produtos por quantidade:\n{agg_qty.to_string()}\n"
+                    agg_qty = df.groupby('Produto')['Quantidade'].sum().sort_values(ascending=False)
+                    if len(agg_qty) <= 50:
+                        summary_data += f"Quantidade por produto (completa):\n{agg_qty.to_string()}\n"
+                    else:
+                        agg_qty = agg_qty.head(10)
+                        summary_data += f"Top produtos por quantidade:\n{agg_qty.to_string()}\n"
                 except:
                     pass
             if 'Produto' in df.columns and 'Valor' in numeric_cols:
                 try:
-                    agg_val = df.groupby('Produto')['Valor'].sum().sort_values(ascending=False).head(10)
-                    summary_data += f"Top produtos por valor:\n{agg_val.to_string()}\n"
+                    agg_val = df.groupby('Produto')['Valor'].sum().sort_values(ascending=False)
+                    if len(agg_val) <= 50:
+                        summary_data += f"Valor total por produto (completo):\n{agg_val.to_string()}\n"
+                    else:
+                        agg_val = agg_val.head(10)
+                        summary_data += f"Top produtos por valor:\n{agg_val.to_string()}\n"
                 except:
                     pass
- 
+            # Maior venda individual
+            if 'Valor' in numeric_cols:
+                try:
+                    max_idx = df['Valor'].idxmax()
+                    max_row = df.loc[max_idx]
+                    product = max_row.get('Produto', 'Desconhecido')
+                    data = max_row.get('Data', 'Desconhecida')
+                    valor = max_row['Valor']
+                    summary_data += f"Maior venda individual: Produto `{product}`, Data `{data}`, Valor R$ {valor:.2f}\n"
+                except:
+                    pass
             # Adicionar amostra de dados (com sampling para evitar prompts longos)
-    if sample_size and len(df) > sample_size:
-        detailed_data += f"\n--- Amostra: {filename} (primeiras {sample_size} linhas) ---\n"
-        detailed_data += df.head(sample_size).to_csv(index=False)
-
-
+            if sample_size and len(df) > sample_size:
+                detailed_data += f"\n--- Amostra: {filename} (primeiras {sample_size} linhas) ---\n"
+                detailed_data += df.head(sample_size).to_string(index=False)
+            else:
+                detailed_data += f"\n--- Dados completos: {filename} ---\n"
+                detailed_data += df.to_string(index=False)
+            detailed_data += "\n"
     # Prompt otimizado com ênfase em não alucinar
     prompt = f"""Você é um analista de dados especializado em análise de planilhas.
 RESUMO DOS DADOS DISPONÍVEIS (Total: {total_rows} linhas):
@@ -766,15 +796,17 @@ PERGUNTA DO USUÁRIO: {question}
 INSTRUÇÕES IMPORTANTES:
 1. Use SOMENTE os dados fornecidos acima. NÃO alucine ou invente valores. Se o valor exato não estiver nos dados ou resumo, informe que não tem informação suficiente.
 2. Para contagens, somas ou quantidades, calcule EXATAMENTE com base nos dados completos fornecidos, sem assumir nada além do que está listado.
-3. Use os dados estatísticos (min, max, média, soma, top valores) para responder perguntas sobre totais, agregações e contagens.
-4. Se precisar de cálculos específicos, baseie-se estritamente nos dados e resumos fornecidos.
-5. Responda em português brasileiro de forma clara, objetiva e profissional.
-6. Use números EXATOS e formatação monetária brasileira: R$ X.XXX,XX (ex: R$ 42.173,01).
-7. NUNCA use negrito, itálico ou formatação de fonte.
-8. Use APENAS código inline do Markdown (crases) para destacar: nomes de produtos, IDs e valores monetários.
-9. Se os dados não forem suficientes para responder exatamente, informe isso claramente sem inventar.
-10. Para perguntas complexas, forneça análise detalhada com base EXCLUSIVAMENTE nas estatísticas e dados disponíveis, sem suposições.
-11. Certifique-se de que sua resposta seja completa e não pare no meio; continue até concluir todos os insights relevantes. Responda de forma direta e completa:"""
+3. Use os dados estatísticos (min, max, média, soma, top valores, valor total por produto, maior venda individual) para responder perguntas sobre totais, agregações, contagens, tops e máximos.
+4. Para perguntas sobre top produtos ou maior valor total, use as seções 'Valor total por produto' ou 'Top produtos por valor' do resumo.
+5. Para perguntas sobre maior venda individual, use a seção 'Maior venda individual' do resumo.
+6. Se precisar de cálculos específicos, baseie-se estritamente nos dados e resumos fornecidos.
+7. Responda em português brasileiro de forma clara, objetiva e profissional.
+8. Use números EXATOS e formatação monetária brasileira: R$ X.XXX,XX (ex: R$ 42.173,01).
+9. NUNCA use negrito, itálico ou formatação de fonte.
+10. Use APENAS código inline do Markdown (crases) para destacar: nomes de produtos, IDs e valores monetários.
+11. Se os dados não forem suficientes para responder exatamente, informe isso claramente sem inventar.
+12. Para perguntas complexas, forneça análise detalhada com base EXCLUSIVAMENTE nas estatísticas e dados disponíveis, sem suposições.
+13. Certifique-se de que sua resposta seja completa e não pare no meio; continue até concluir todos os insights relevantes. Responda de forma direta e completa:"""
     return prompt
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
     """Chamada síncrona ao modelo com tratamento de erros aprimorado e continuação"""
@@ -797,13 +829,13 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
                 block_reason = resp.prompt_feedback.block_reason if hasattr(resp.prompt_feedback, 'block_reason') else "Razão desconhecida"
                 return f"Prompt bloqueado: {block_reason}. Tente reformular a pergunta ou verifique os dados."
             candidate = resp.candidates[0]
-            if candidate.finish_reason in [3, 4, 6]:  # SAFETY=3, RECITATION=4, BLOCKED=6
+            if candidate.finish_reason in [3, 4, 6]: # SAFETY=3, RECITATION=4, BLOCKED=6
                 return f"Geração parada: {candidate.finish_reason}. Possivelmente conteúdo bloqueado por segurança ou outro motivo. Tente reformular."
             if not candidate.content.parts:
                 return "Nenhuma parte de conteúdo na resposta. Possivelmente bloqueado por segurança. Tente reformular a pergunta."
             part_text = candidate.content.parts[0].text
             full_text += part_text
-            if candidate.finish_reason != 2:  # 2 = MAX_TOKENS
+            if candidate.finish_reason != 2: # 2 = MAX_TOKENS
                 break
             if continuation_count >= max_continuations:
                 full_text += "\n\n(Resposta truncada devido ao limite de tokens.)"
