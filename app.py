@@ -751,9 +751,9 @@ def build_prompt_with_data(question, dataframes, sample_size=SAMPLE_SIZE):
                     pass
  
             # Adicionar amostra de dados (com sampling para evitar prompts longos)
-           if sample_size and len(df) > sample_size:
-    detailed_data += f"\n--- Amostra: {filename} (primeiras {sample_size} linhas) ---\n"
-    detailed_data += df.head(sample_size).to_csv(index=False)
+    if sample_size and len(df) > sample_size:
+        detailed_data += f"\n--- Amostra: {filename} (primeiras {sample_size} linhas) ---\n"
+        detailed_data += df.head(sample_size).to_csv(index=False)
 
 
     # Prompt otimizado com ênfase em não alucinar
