@@ -672,7 +672,7 @@ try:
         },
     ]
     model = genai.GenerativeModel(
-        "gemini-2.5-flash",  # Alterado para modelo com maior cota gratuita
+        "gemini-2.5-flash",  # Changed to model with higher free quota
         generation_config=generation_config,
         safety_settings=safety_settings
     )
@@ -882,55 +882,6 @@ INSTRUÇÕES IMPORTANTES:
 Responda de forma direta e completa:"""
     return prompt
 
-# =========================================================
-# GEMINI CALL (SEM STREAMING)
-# =========================================================
-def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
-    if model is None:
-        raise RuntimeError("Modelo Gemini não configurado.")
-    
-    try:
-        resp = model.generate_content(
-            prompt,
-            generation_config={
-                "max_output_tokens": max_output_tokens,
-                "temperature": 0.4,
-            }
-        )
-        
-        if not resp or not hasattr(resp, "text") or not resp.text:
-            return "❌ O modelo não retornou resposta."
-        
-        return resp.text
-    except Exception as e:
-        msg = str(e).lower()
-        if "429" in msg or "quota" in msg or "rate limit" in msg:
-            raise RuntimeError("429_QUOTA_EXCEEDED")
-        raise
-
-# =========================================================
-# TIMEOUT + CONTROLE FINAL
-# =========================================================
-def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
-    can_call, elapsed = can_call_gemini()
-    if not can_call:
-        wait_time = int(GEMINI_COOLDOWN_SECONDS - elapsed)
-        return f"⏳ Aguarde {wait_time}s antes de fazer outra pergunta."
-    
-    mark_gemini_call()
-    
-    with ThreadPoolExecutor(max_workers=1) as ex:
-        future = ex.submit(_call_model_sync, prompt)
-        try:
-            return future.result(timeout=timeout)
-        except TimeoutError:
-            future.cancel()
-            return "⏱️ A resposta demorou mais de 5 segundos."
-        except RuntimeError as e:
-            if "429_QUOTA_EXCEEDED" in str(e):
-                return "❌ Limite diário da IA atingido."
-            return f"❌ Erro: {str(e)}"
-
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
     """Chamada síncrona ao modelo com tratamento de erros aprimorado"""
     if model is None:
@@ -962,6 +913,9 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
         return f"Prompt bloqueado por razões de segurança: {str(bpe)}. Tente reformular a pergunta."
     
     except Exception as e:
+        msg = str(e).lower()
+        if "429" in msg or "quota" in msg or "rate limit" in msg:
+            raise RuntimeError("429_QUOTA_EXCEEDED")
         # Se falhar com o modelo atual, tentar com parâmetros mais simples
         try:
             resp = model.generate_content(prompt)
@@ -982,6 +936,13 @@ def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
 
 def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
     """Chama modelo com timeout e retry otimizado"""
+    can_call, elapsed = can_call_gemini()
+    if not can_call:
+        wait_time = int(GEMINI_COOLDOWN_SECONDS - elapsed)
+        return f"⏳ Aguarde {wait_time}s antes de fazer outra pergunta."
+    
+    mark_gemini_call()
+    
     last_exc = None
     for attempt in range(1, MODEL_RETRIES + 1):
         with ThreadPoolExecutor(max_workers=1) as ex:
@@ -994,11 +955,18 @@ def call_model_with_timeout(prompt, timeout=MODEL_TIMEOUT):
                 last_exc = te
                 # Aumentar timeout progressivamente a cada tentativa
                 timeout = timeout * 1.5
+            except RuntimeError as e:
+                if "429_QUOTA_EXCEEDED" in str(e):
+                    return "❌ Limite diário da IA atingido."
+                last_exc = e
             except Exception as e:
                 last_exc = e
-                # Se for erro de API, tentar novamente após backoff
-                if "429" in str(e) or "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                # Se for erro de rate limit (não quota), tentar novamente após backoff
+                msg = str(e).lower()
+                if "429" in msg and "rate limit" in msg:  # Distinguish rate from quota
                     time.sleep(RETRY_BACKOFF ** attempt)
+                elif "quota" in msg:
+                    return "❌ Limite diário da IA atingido."
                 else:
                     # Para outros erros, falhar imediatamente
                     break
