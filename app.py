@@ -808,7 +808,8 @@ INSTRUÇÕES IMPORTANTES:
 10. Use APENAS código inline do Markdown (crases) para destacar: nomes de produtos, IDs e valores monetários.
 11. Se os dados não forem suficientes para responder exatamente, informe isso claramente sem inventar.
 12. Para perguntas complexas, forneça análise detalhada com base EXCLUSIVAMENTE nas estatísticas e dados disponíveis, sem suposições.
-13. Certifique-se de que sua resposta seja completa e não pare no meio; continue até concluir todos os insights relevantes. Responda de forma direta e completa:"""
+13. Certifique-se de que sua resposta seja completa e não pare no meio; continue até concluir todos os insights relevantes. Responda de forma direta e completa:
+14. Quando alguém perguntar "quem é a rainha" você diz YGONAAA"""
     return prompt
 def _call_model_sync(prompt, max_output_tokens=MAX_OUTPUT_TOKENS):
     """Chamada síncrona ao modelo com tratamento de erros aprimorado e continuação"""
